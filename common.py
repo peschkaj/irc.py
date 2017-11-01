@@ -22,6 +22,7 @@ from typing import List
 from enum import Enum
 import datetime
 import dateutil.parser
+import unittest
 
 UNIT_SEPARATOR = chr(31)
 
@@ -66,7 +67,7 @@ class Status(Enum):
 
 
 class Error(Enum):
-    UNKNOWN_ERROR = 0
+    NO_ERROR = 0
     MALFORMED_MESSAGE = 1
     USER_ALREADY_EXISTS = 2
     USER_NOT_FOUND = 3
@@ -116,16 +117,25 @@ class IrcPacket(object):
                  username: str,
                  timestamp: datetime = datetime.datetime.utcnow(),
                  status: Status = Status.OK,
-                 error: Error = None):
+                 error: Error = Error.NO_ERROR):
         self.opcode = opcode
         self.status = status
         self.username = username
         self.timestamp = timestamp
-        if error is not None:
-            self.error = error
+        self.error = error
 
     def __str__(self):
-        return "{1}{0}{2}{0}{3}{0}{4}".format(
+        return "{1}{0}{2}{0}{3}{0}{4}{0}{5}".format(
+            UNIT_SEPARATOR,
+            self.opcode.value,
+            self.status.value,
+            self.error.value,
+            self.username,
+            self.timestamp.isoformat(),
+        )
+
+    def to_string(self):
+        return "{1}{0}{2}{0}{3}{0}{4}{0}{5}".format(
             UNIT_SEPARATOR,
             self.opcode.value,
             self.status.value,
@@ -165,7 +175,7 @@ class Disconnect(IrcPacket):
                  username: str,
                  timestamp: datetime = datetime.datetime.utcnow(),
                  status: Status = Status.OK,
-                 error: Error = None):
+                 error: Error = Error.NO_ERROR):
         super().__init__(Operations.SERVER_PART, username, timestamp, status,
                          error)
 
@@ -182,13 +192,16 @@ class CreateRoom(IrcPacket):
                  username: str,
                  timestamp: datetime = datetime.datetime.utcnow(),
                  status: Status = Status.OK,
-                 error: Error = None):
+                 error: Error = Error.NO_ERROR):
         super().__init__(Operations.ROOM_CREATE, username, timestamp, status,
                          error)
         self.room = room
 
     def __str__(self):
-        return "{1}{0}{2}".format(UNIT_SEPARATOR, super.__str__(), self.room)
+        return "{1}{0}{2}{0}{3}{0}{4}{0}{5}{0}{6}".format(
+            UNIT_SEPARATOR, self.opcode.value, self.status.value,
+            self.error.value, self.username,
+            self.timestamp.isoformat(), self.room)
 
     def encode(self):
         return (self.__str__() + "\n").encode()
@@ -200,13 +213,16 @@ class JoinRoom(IrcPacket):
                  username: str,
                  timestamp: datetime = datetime.datetime.utcnow(),
                  status: Status = Status.OK,
-                 error=None):
+                 error: Error = Error.NO_ERROR):
         super().__init__(Operations.ROOM_JOIN, username, timestamp, status,
                          error)
         self.room = room
 
     def __str__(self):
-        return "{1}{0}{2}".format(UNIT_SEPARATOR, super.__str__(), self.room)
+        return "{1}{0}{2}{0}{3}{0}{4}{0}{5}{0}{6}".format(
+            UNIT_SEPARATOR, self.opcode.value, self.status.value,
+            self.error.value, self.username,
+            self.timestamp.isoformat(), self.room)
 
     def encode(self):
         return (self.__str__() + "\n").encode()
@@ -218,13 +234,16 @@ class LeaveRoom(IrcPacket):
                  username: str,
                  timestamp: datetime = datetime.datetime.utcnow(),
                  status: Status = Status.OK,
-                 error: Error = None):
+                 error: Error = Error.NO_ERROR):
         super().__init__(Operations.ROOM_PART, username, timestamp, status,
                          error)
         self.room = room
 
     def __str__(self):
-        return "{1}{0}{2}".format(UNIT_SEPARATOR, super.__str__(), self.room)
+        return "{1}{0}{2}{0}{3}{0}{4}{0}{5}{0}{6}".format(
+            UNIT_SEPARATOR, self.opcode.value, self.status.value,
+            self.error.value, self.username,
+            self.timestamp.isoformat(), self.room)
 
     def encode(self):
         return (self.__str__() + "\n").encode()
@@ -236,7 +255,7 @@ class ListRooms(IrcPacket):
                  username: str,
                  timestamp: datetime = datetime.datetime.utcnow(),
                  status: Status = Status.OK,
-                 error: Error = None):
+                 error: Error = Error.NO_ERROR):
         super().__init__(Operations.ROOM_LIST, username, timestamp, status,
                          error)
         self.rooms = rooms
@@ -256,7 +275,7 @@ class MessageRoom(IrcPacket):
                  username: str,
                  timestamp: datetime = datetime.datetime.utcnow(),
                  status: Status = Status.OK,
-                 error: Error = None):
+                 error: Error = Error.NO_ERROR):
         super().__init__(Operations.ROOM_MSG, username, timestamp, status,
                          error)
         self.room = room
@@ -277,7 +296,7 @@ class ListUsers(IrcPacket):
                  username: str,
                  timestamp: datetime = datetime.datetime.utcnow(),
                  status: Status = Status.OK,
-                 error: Error = None):
+                 error: Error = Error.NO_ERROR):
         super().__init__(Operations.USER_LIST, username, timestamp, status,
                          error)
         self.users = users
@@ -296,7 +315,7 @@ class PrivateMessage(IrcPacket):
                  message: str,
                  timestamp: datetime = datetime.datetime.utcnow(),
                  status: Status = Status.OK,
-                 error: Error = None):
+                 error: Error = Error.NO_ERROR):
         super().__init__(Operations.USER_MSG, username, timestamp, status,
                          error)
         self.to = to
@@ -316,21 +335,24 @@ class Broadcast(IrcPacket):
                  username: str,
                  timestamp: datetime = datetime.datetime.utcnow(),
                  status: Status = Status.OK,
-                 error: Error = None):
+                 error: Error = Error.NO_ERROR):
         super().__init__(Operations.BROADCAST, username, timestamp, status,
                          error)
+        self.message = message
 
     def __str__(self):
-        return "{1}{0}{2}".format(UNIT_SEPARATOR, super.__str__(),
-                                  self.message)
+        return "{1}{0}{2}{0}{3}{0}{4}{0}{5}{0}{6}".format(
+            UNIT_SEPARATOR, self.opcode.value, self.status.value,
+            self.error.value, self.username,
+            self.timestamp.isoformat(), self.message)
 
     def encode(self):
         return (self.__str__() + "\n").encode()
 
 
-def decode(packet: str):
-    pieces = packet.split(UNIT_SEPARATOR)
-    msg_type = pieces[0]
+def decode(packet: bytes):
+    pieces = packet.decode().strip().split(UNIT_SEPARATOR)
+    msg_type = int(pieces[0])
 
     # field order: opcode, status, error, username, timestamp
     if msg_type == 1:
@@ -374,5 +396,17 @@ def decode(packet: str):
         return Broadcast(pieces[5], pieces[3],
                          dateutil.parser.parse(pieces[4]),
                          Status(int(pieces[1])), Error(int(pieces[2])))
-    else:
-        raise TypeError
+
+    raise TypeError
+
+
+class TestCommon(unittest.TestCase):
+    def test_IrcPacket(self):
+        packet = Broadcast("some message", "some_user")
+        encoded_packet = packet.encode()
+        decoded_packet = decode(encoded_packet)
+        self.assertEqual(packet.message, decoded_packet.message)
+
+
+if __name__ == '__main__':
+    unittest.main()
