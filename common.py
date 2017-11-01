@@ -18,7 +18,10 @@
 
 # Common structures for CS594 project
 
+from typing import List
 from enum import Enum
+import datetime
+import dateutil.parser
 
 UNIT_SEPARATOR = chr(31)
 
@@ -108,19 +111,28 @@ class Error(Enum):
 
 
 class IrcPacket(object):
-    def __init__(self, opcode, status=Status.OK, error=None):
+    def __init__(self,
+                 opcode: Operations,
+                 username: str,
+                 timestamp: datetime = datetime.datetime.utcnow(),
+                 status: Status = Status.OK,
+                 error: Error = None):
         self.opcode = opcode
         self.status = status
+        self.username = username
+        self.timestamp = timestamp
         if error is not None:
             self.error = error
 
     def __str__(self):
-        if self.error is None:
-            return "{1}{0}{2}".format(UNIT_SEPARATOR, self.opcode.name,
-                                      self.status.name)
-
-        return "{1}{0}{2}{0}{3}".format(self.separator, self.opcode.name,
-                                        self.status.name, self.error)
+        return "{1}{0}{2}{0}{3}{0}{4}".format(
+            UNIT_SEPARATOR,
+            self.opcode.value,
+            self.status.value,
+            self.error.value,
+            self.username,
+            self.timestamp.isoformat(),
+        )
 
     def encode(self):
         return (self.__str__() + "\n").encode()
@@ -128,106 +140,108 @@ class IrcPacket(object):
 
 class Connect(IrcPacket):
     def __init__(self,
-                 username,
-                 server="127.0.0.1",
-                 port="8080",
-                 status=Status.OK,
-                 error=None):
-        super().__init__(Operations.SERVER_JOIN, status, error)
-        self.username = username
+                 username: str,
+                 timestamp: datetime = datetime.datetime.utcnow(),
+                 server: str = "127.0.0.1",
+                 port: int = 8080,
+                 status: Status = Status.OK,
+                 error: Error = None):
+        super().__init__(Operations.SERVER_JOIN, username, timestamp, status,
+                         error)
         self.server = server
         self.port = port
 
     def __str__(self):
-        if self.error is not None:
-            return super.__str__()
-
-        return "{1}{0}{2}".format(UNIT_SEPARATOR,
-                                  super.__str__(), self.username)
+        return "{1}{0}{2}{0}{3}".format(UNIT_SEPARATOR,
+                                        super.__str__(), self.server,
+                                        self.port)
 
     def encode(self):
         return (self.__str__() + "\n").encode()
 
 
 class Disconnect(IrcPacket):
-    def __init__(self, username, status=Status.OK, error=None):
-        super().__init__(Operations.SERVER_PART, status, error)
-        self.username = username
+    def __init__(self,
+                 username: str,
+                 timestamp: datetime = datetime.datetime.utcnow(),
+                 status: Status = Status.OK,
+                 error: Error = None):
+        super().__init__(Operations.SERVER_PART, username, timestamp, status,
+                         error)
 
     def __str__(self):
-        if self.error is not None:
-            return super.__str__()
-
-        return "{1}{0}{2}".format(UNIT_SEPARATOR,
-                                  super.__str__(), self.username)
+        return super.__str__()
 
     def encode(self):
         return (self.__str__() + "\n").encode()
 
 
 class CreateRoom(IrcPacket):
-    def __init__(self, username, room, status=Status.OK, error=None):
-        super().__init__(Operations.ROOM_CREATE, status, error)
-        self.username = username
+    def __init__(self,
+                 room: str,
+                 username: str,
+                 timestamp: datetime = datetime.datetime.utcnow(),
+                 status: Status = Status.OK,
+                 error: Error = None):
+        super().__init__(Operations.ROOM_CREATE, username, timestamp, status,
+                         error)
         self.room = room
 
     def __str__(self):
-        if self.error is not None:
-            return super.__str__()
-
-        return "{1}{0}{2}{0}{3}".format(UNIT_SEPARATOR,
-                                        super.__str__(), self.username,
-                                        self.room)
+        return "{1}{0}{2}".format(UNIT_SEPARATOR, super.__str__(), self.room)
 
     def encode(self):
         return (self.__str__() + "\n").encode()
 
 
 class JoinRoom(IrcPacket):
-    def __init__(self, username, room, status=Status.OK, error=None):
-        super().__init__(Operations.ROOM_JOIN, status, error)
-        self.username = username
+    def __init__(self,
+                 room: str,
+                 username: str,
+                 timestamp: datetime = datetime.datetime.utcnow(),
+                 status: Status = Status.OK,
+                 error=None):
+        super().__init__(Operations.ROOM_JOIN, username, timestamp, status,
+                         error)
         self.room = room
 
     def __str__(self):
-        if self.error is not None:
-            return super.__str__()
-
-        return "{1}{0}{2}{0}{3}".format(UNIT_SEPARATOR,
-                                        super.__str__(), self.username,
-                                        self.room)
+        return "{1}{0}{2}".format(UNIT_SEPARATOR, super.__str__(), self.room)
 
     def encode(self):
         return (self.__str__() + "\n").encode()
 
 
 class LeaveRoom(IrcPacket):
-    def __init__(self, username, room, status=Status.OK, error=None):
-        super().__init__(Operations.ROOM_PART, status, error)
-        self.username = username
+    def __init__(self,
+                 room: str,
+                 username: str,
+                 timestamp: datetime = datetime.datetime.utcnow(),
+                 status: Status = Status.OK,
+                 error: Error = None):
+        super().__init__(Operations.ROOM_PART, username, timestamp, status,
+                         error)
         self.room = room
 
     def __str__(self):
-        if self.error is not None:
-            return super.__str__()
-
-        return "{1}{0}{2}{0}{3}".format(UNIT_SEPARATOR,
-                                        super.__str__(), self.username,
-                                        self.room)
+        return "{1}{0}{2}".format(UNIT_SEPARATOR, super.__str__(), self.room)
 
     def encode(self):
         return (self.__str__() + "\n").encode()
 
 
 class ListRooms(IrcPacket):
-    def __init__(self, rooms=[], status=Status.OK, error=None):
-        super().__init__(Operations.ROOM_LIST, status, error)
+    def __init__(self,
+                 rooms: List[str],
+                 username: str,
+                 timestamp: datetime = datetime.datetime.utcnow(),
+                 status: Status = Status.OK,
+                 error: Error = None):
+        super().__init__(Operations.ROOM_LIST, username, timestamp, status,
+                         error)
         self.rooms = rooms
 
     def __str__(self):
-        if self.error is not None:
-            return super.__str__()
-
         return "{1}{0}{2}".format(UNIT_SEPARATOR,
                                   super.__str__(), ",".join(self.rooms))
 
@@ -236,19 +250,129 @@ class ListRooms(IrcPacket):
 
 
 class MessageRoom(IrcPacket):
-    def __init__(self, username, room, message, status=Status.OK, error=None):
-        super().__init__(Operations.ROOM_MSG, status, error)
-        self.username = username
+    def __init__(self,
+                 room: str,
+                 message: str,
+                 username: str,
+                 timestamp: datetime = datetime.datetime.utcnow(),
+                 status: Status = Status.OK,
+                 error: Error = None):
+        super().__init__(Operations.ROOM_MSG, username, timestamp, status,
+                         error)
         self.room = room
         self.message = message
 
     def __str__(self):
-        if self.error is not None:
-            return super.__str__()
-
-        return "{1}{0}{2}{0}{3}{0}{4}".format(UNIT_SEPARATOR,
-                                              super.__str__(), self.username,
-                                              self.room, self.message)
+        return "{1}{0}{2}{0}{3}".format(UNIT_SEPARATOR,
+                                        super.__str__(), self.room,
+                                        self.message)
 
     def encode(self):
         return (self.__str__() + "\n").encode()
+
+
+class ListUsers(IrcPacket):
+    def __init__(self,
+                 users: List[str],
+                 username: str,
+                 timestamp: datetime = datetime.datetime.utcnow(),
+                 status: Status = Status.OK,
+                 error: Error = None):
+        super().__init__(Operations.USER_LIST, username, timestamp, status,
+                         error)
+        self.users = users
+
+    def __str__(self):
+        return "{1}{0}{2}".format(UNIT_SEPARATOR, super.__str__(), self.users)
+
+    def encode(self):
+        return (self.__str__() + "\n").encode()
+
+
+class PrivateMessage(IrcPacket):
+    def __init__(self,
+                 username: str,
+                 to: str,
+                 message: str,
+                 timestamp: datetime = datetime.datetime.utcnow(),
+                 status: Status = Status.OK,
+                 error: Error = None):
+        super().__init__(Operations.USER_MSG, username, timestamp, status,
+                         error)
+        self.to = to
+        self.message = message
+
+    def __str__(self):
+        return "{1}{0}{2}{0}{3}".format(UNIT_SEPARATOR,
+                                        super.__str__(), self.to, self.message)
+
+    def encode(self):
+        return (self.__str__() + "\n").encode()
+
+
+class Broadcast(IrcPacket):
+    def __init__(self,
+                 message: str,
+                 username: str,
+                 timestamp: datetime = datetime.datetime.utcnow(),
+                 status: Status = Status.OK,
+                 error: Error = None):
+        super().__init__(Operations.BROADCAST, username, timestamp, status,
+                         error)
+
+    def __str__(self):
+        return "{1}{0}{2}".format(UNIT_SEPARATOR, super.__str__(),
+                                  self.message)
+
+    def encode(self):
+        return (self.__str__() + "\n").encode()
+
+
+def decode(packet: str):
+    pieces = packet.split(UNIT_SEPARATOR)
+    msg_type = pieces[0]
+
+    # field order: opcode, status, error, username, timestamp
+    if msg_type == 1:
+        return Connect(pieces[3],
+                       dateutil.parser.parse(pieces[4]), pieces[5],
+                       int(pieces[6]),
+                       Status(int(pieces[1])), Error(int(pieces[2])))
+    elif msg_type == 2:
+        return Disconnect(pieces[3],
+                          dateutil.parser.parse(pieces[4]),
+                          Status(int(pieces[1])), Error(int(pieces[2])))
+    elif msg_type == 3:
+        return CreateRoom(pieces[5], pieces[3],
+                          dateutil.parser.parse(pieces[4]),
+                          Status(int(pieces[1])), Error(int(pieces[2])))
+    elif msg_type == 4:
+        return JoinRoom(pieces[5], pieces[3],
+                        dateutil.parser.parse(pieces[4]),
+                        Status(int(pieces[1])), Error(int(pieces[2])))
+    elif msg_type == 5:
+        return LeaveRoom(pieces[5], pieces[3],
+                         dateutil.parser.parse(pieces[4]),
+                         Status(int(pieces[1])), Error(int(pieces[2])))
+    elif msg_type == 6:
+        return MessageRoom(pieces[5], pieces[7], pieces[3],
+                           dateutil.parser.parse(pieces[4]),
+                           Status(int(pieces[1])), Error(int(pieces[2])))
+    elif msg_type == 7:
+        return ListRooms(",".split(pieces[5]), pieces[3],
+                         dateutil.parser.parse(pieces[4]),
+                         Status(int(pieces[1])), Error(int(pieces[2])))
+    elif msg_type == 8:
+        return ListUsers(",".split(pieces[5]), pieces[3],
+                         dateutil.parser.parse(pieces[4]),
+                         Status(int(pieces[1])), Error(int(pieces[2])))
+    elif msg_type == 9:
+        return PrivateMessage(pieces[3], pieces[5], pieces[6],
+                              dateutil.parser.parse(pieces[4]),
+                              Status(int(pieces[1])), Error(int(pieces[2])))
+    elif msg_type == 10:
+        return Broadcast(pieces[5], pieces[3],
+                         dateutil.parser.parse(pieces[4]),
+                         Status(int(pieces[1])), Error(int(pieces[2])))
+    else:
+        raise TypeError
