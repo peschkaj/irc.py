@@ -124,6 +124,11 @@ class IrcPacket(object):
         self.timestamp = timestamp
         self.error = error
 
+    def __eq__(self, other):
+        if type(other) is type(self):
+            return self.__dict__ == other.__dict__
+        return False
+
     def __str__(self):
         return "{1}{0}{2}{0}{3}{0}{4}{0}{5}".format(
             UNIT_SEPARATOR,
@@ -181,7 +186,14 @@ class Disconnect(IrcPacket):
                          error)
 
     def __str__(self):
-        return super.__str__()
+        return "{1}{0}{2}{0}{3}{0}{4}{0}{5}".format(
+            UNIT_SEPARATOR,
+            self.opcode.value,
+            self.status.value,
+            self.error.value,
+            self.username,
+            self.timestamp.isoformat(),
+        )
 
     def encode(self):
         return (self.__str__() + "\n").encode()
@@ -306,7 +318,10 @@ class ListUsers(IrcPacket):
         self.users = users
 
     def __str__(self):
-        return "{1}{0}{2}".format(UNIT_SEPARATOR, super.__str__(), self.users)
+        return "{1}{0}{2}{0}{3}{0}{4}{0}{5}{0}{6}".format(
+            UNIT_SEPARATOR, self.opcode.value, self.status.value,
+            self.error.value, self.username,
+            self.timestamp.isoformat(), ",".join(self.users))
 
     def encode(self):
         return (self.__str__() + "\n").encode()
@@ -383,15 +398,23 @@ def decode(packet: bytes):
                          dateutil.parser.parse(pieces[4]),
                          Status(int(pieces[1])), Error(int(pieces[2])))
     elif msg_type == 6:
-        return MessageRoom(pieces[5], pieces[7], pieces[3],
+        return MessageRoom(pieces[5], pieces[6], pieces[3],
                            dateutil.parser.parse(pieces[4]),
                            Status(int(pieces[1])), Error(int(pieces[2])))
     elif msg_type == 7:
-        return ListRooms(",".split(pieces[5]), pieces[3],
+        room_list = []
+        if (len(pieces) > 5):
+            room_list.extend(pieces[5].split(','))
+
+        return ListRooms(room_list, pieces[3],
                          dateutil.parser.parse(pieces[4]),
                          Status(int(pieces[1])), Error(int(pieces[2])))
     elif msg_type == 8:
-        return ListUsers(",".split(pieces[5]), pieces[3],
+        user_list = []
+        if (len(pieces) > 5):
+            user_list.extend(pieces[5].split(','))
+
+        return ListUsers(user_list, pieces[3],
                          dateutil.parser.parse(pieces[4]),
                          Status(int(pieces[1])), Error(int(pieces[2])))
     elif msg_type == 9:
@@ -411,24 +434,73 @@ class TestCommon(unittest.TestCase):
         p = Connect("some_user", "localhost", 8080)
         ep = p.encode()
         dp = decode(ep)
-        self.assertEqual(p.server, dp.server)
-        self.assertEqual(p.port, dp.port)
-        self.assertEqual(p.username, dp.username)
-        self.assertEqual(p.timestamp, dp.timestamp)
-        self.assertEqual(p.opcode, dp.opcode)
-        self.assertEqual(p.status, dp.status)
-        self.assertEqual(p.error, dp.error)
+        self.assertEqual(p, dp)
+
+    def test_Disconnect(self):
+        p = Disconnect("some_user")
+        ep = p.encode()
+        dp = decode(ep)
+        self.assertEqual(p, dp)
+
+    def test_CreateRoom(self):
+        p = CreateRoom("some_user", "room")
+        ep = p.encode()
+        dp = decode(ep)
+        self.assertEqual(p, dp)
+
+    def test_JoinRoom(self):
+        p = JoinRoom("some_user", "room")
+        ep = p.encode()
+        dp = decode(ep)
+        self.assertEqual(p, dp)
+
+    def test_LeaveRoom(self):
+        p = LeaveRoom("some_user", "room")
+        ep = p.encode()
+        dp = decode(ep)
+        self.assertEqual(p, dp)
+
+    def test_ListRooms_empty(self):
+        p = ListRooms([], "some_user")
+        ep = p.encode()
+        dp = decode(ep)
+        self.assertEqual(p, dp)
+
+    def test_ListRooms_withRooms(self):
+        p = ListRooms(["first", "second", "third"], "some_user")
+        ep = p.encode()
+        dp = decode(ep)
+        self.assertEqual(p, dp)
+
+    def test_MessageRoom(self):
+        p = MessageRoom("room", "message", "user")
+        ep = p.encode()
+        dp = decode(ep)
+        self.assertEqual(p, dp)
+
+    def test_ListUsers_empty(self):
+        p = ListUsers([], "user")
+        ep = p.encode()
+        dp = decode(ep)
+        self.assertEqual(p, dp)
+
+    def test_ListUsers_withUsers(self):
+        p = ListUsers(["some user", "another user", "a third user"], "user")
+        ep = p.encode()
+        dp = decode(ep)
+        self.assertEqual(p, dp)
+
+    def test_PrivateMessage(self):
+        p = PrivateMessage("from", "to", "message")
+        ep = p.encode()
+        dp = decode(ep)
+        self.assertEqual(p, dp)
 
     def test_Broadcast(self):
         p = Broadcast("some message", "some_user")
         ep = p.encode()
         dp = decode(ep)
-        self.assertEqual(p.message, dp.message)
-        self.assertEqual(p.username, dp.username)
-        self.assertEqual(p.timestamp, dp.timestamp)
-        self.assertEqual(p.opcode, dp.opcode)
-        self.assertEqual(p.status, dp.status)
-        self.assertEqual(p.error, dp.error)
+        self.assertEqual(p, dp)
 
 
 if __name__ == '__main__':
