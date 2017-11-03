@@ -1,0 +1,392 @@
+#+TITLE: CS594 RFC
+#+AUTHOR: Jeremiah Peschka <jpeschka@pdx.edu>
+#+STARTUP: showall indent
+#+OPTIONS: usepackage{enumerate,parskip,fancyvrb,fancyhdr}
+#+OPTIONS: pagestyle{fancy}
+#+OPTIONS: lhead{CS594}
+#+OPTIONS: rhead{IRC Class Project Specification}
+
+* Status of this Memo
+
+This Internet-Draft is submitted in full conformance with the provisions of BCP
+78 and BCP 79. This document may not be modified, and derivative works of it may
+not be created, except to publish it as an RFC and to translate it into
+languages other than English.
+
+Internet-Drafts are working documents of the Internet Engineering Task Force
+(IETF), its areas, and its working groups. Note that other groups may also
+distribute working documents as Internet- Drafts.
+
+Internet-Drafts are draft documents valid for a maximum of six months and may be
+updated, replaced, or obsoleted by other documents at any time. It is
+inappropriate to use Internet-Drafts as reference material or to cite them other
+than as "work in progress."
+
+The list of current Internet-Drafts can be accessed at
+http://www.ietf.org/ietf/1id-abstracts.txt
+
+The list of Internet-Draft Shadow Directories can be accessed at
+http://www.ietf.org/shadow.html
+
+This Internet-Draft will expire on 2017-12-31.
+
+* Copyright Notice
+
+Copyright (c) 2017 IETF Trust and the person identified as the document authors.
+All rights reserved.
+
+This document is subject to BCP 78 and the IETF Trust's Legal Provisions
+Relating to IETF Documents (http://trustee.ietf.org/license-info) in effect on
+the date of publication of this document. Please review these documents
+carefully, as they describe your rights and restrictions with respect to this
+document. Code Components extracted from this document must include Simplified
+BSD License text as described in Section 4.e of the Trust Legal Provisions and
+are provided without warranty as described in the Simplified BSD License.
+
+* Abstract
+
+This memo describes the communication protocol for an IRC-like client-server
+application for the Internetworking Protocols course (CS494/594) at Portland
+State University.
+
+* Introduction
+
+This document describes a simple Internet Relay Chat (IRC) like protocol where
+clients can communicate with each other. This system uses a central server to
+relay messages between users.
+
+Users can create, join, and leave rooms. A room is a group of users subscribed
+to the same set of messages. Any message sent to a specific room is forwarded to
+all users currently subscribed to that room.
+
+Users can send a private message to another user by knowing that user's name.
+
+Users can broadcast a message to all users of the system.
+
+* Basic Information
+
+All communication takes place over TCP/IP. The listening port is configurable,
+however the client and server use port 8080 as a default. Clients will connect
+to this port and maintain a persistent connection with the server for the
+duration of the user's session. The client and send messages to the server over
+this open channel and the server can reply via the same channel.
+
+This messaging protocol is asynchronous. After sending a message, the client is
+free to perform other activities. The server may asynchronously send messages to
+the client at any time.
+
+Server operators may choose to limit the number of users and rooms. If a user
+attempts an action that would exceed a limit set by a server operator, the
+server will send an error code to the client.
+
+\clearpage
+* Message Structure
+<<message_structure>>
+
+** General Message Format
+
+Messages are sent over the wire as UTF-8 byte arrays. In this document, "byte array" and "byte string" are used interchangeably. Messages are terminated with a newline character. Message fields are delimited by the ASCII unit separator character (character code 31).
+
+*** Core Message fields
+<<core_fields>>
+
+The following fields are present in all messages:
+
+#+BEGIN_SRC text
+opcode
+status
+error
+username
+timestamp
+#+END_SRC
+
+*** Field Definitions
+
+*~opcode~* - specifies the type of message.
+*~status~* - status response from the server (OK or error).
+*~error~* - The error type. Indicates a more specific error code. This field can be ignored when status is OK, however its value should be ~NO_ERROR~ in that case.
+*~username~* - The name of the user initiating the message.
+*~timestamp~* - The time the message was created, stored as a string in ISO 8601 format.
+
+*** Operation Codes
+<<opcodes>>
+
+#+BEGIN_SRC text
+SERVER_JOIN = 1
+SERVER_PART = 2
+ROOM_CREATE = 3
+ROOM_JOIN = 4
+ROOM_PART = 5
+ROOM_MSG = 6
+ROOM_LIST = 7
+USER_LIST = 8
+USER_MSG = 9
+BROADCAST = 10
+#+END_SRC
+
+*** Error Codes
+<<error_codes>>
+
+#+BEGIN_SRC text
+NO_ERROR = 0
+MALFORMED_MESSAGE = 1
+USER_ALREADY_EXISTS = 2
+USER_NOT_FOUND = 3
+SERVER_BUSY = 4
+ROOM_NOT_FOUND = 5
+ROOM_ALREADY_EXISTS = 6
+#+END_SRC
+
+** Label Semantics
+<<label>>
+
+Both user and room names are considered to be labels. The following rules apply
+to valid labels:
+
+- Any ASCII or UTF-8 character is allowed except the ASCII record separator, spaces, and commas.
+- Must be at least 3 characters.
+
+\clearpage
+
+* Client Messages
+
+** Connect
+<<connect>>
+
+This MUST be the first message sent to the server.
+
+*** Message Format
+
+ The message format is identical to the format in [[core_fields][Core Message Fields]].
+
+*** Usage
+
+    Before additional messages can be sent, the client MUST provide a user name to the server and receive acknowledgment.
+
+The server MUST associate the client's user name with the socket connection to
+the client. A ~Connect~ message SHOULD be sent only once. If the server receives
+additional ~Connect~ messages, the server MAY choose to ignore the duplicate
+message, send an error message, or disconnect the user.
+
+*** Response
+
+The server MUST respond with an identical message with a status of ~OK~ and an
+error of ~NO_ERROR~.
+
+** Disconnect
+<<disconnect>>
+
+This message disconnects a client from the server. The user should be removed
+from all rooms.
+
+The server MAY choose to notify rooms and participants in private messages that
+the user has left the server.
+
+*** Message Format
+
+The message format is identical to the format in [[core_fields][Core Message Fields]].
+
+*** Usage
+
+Once the Disconnect message is sent, the user SHOULD no longer be able to send messages to the server.
+
+Any additional messages sent by the client MUST be ignored.
+
+*** Response
+
+The server MUST respond with an identical message with a status of ~OK~ and an error of ~NO_ERROR~.
+
+** Create Room
+<<create_room>>
+
+This message creates a new room. After acknowledgment, this room MUST be visible
+to other users until the room is destroyed.
+
+*** Message Format
+
+The initial fields of this message are identical to the format in [[core_fields][Core Message Fields]].
+
+In addition to the fields from [[core_fields][Core Message Fields]], a Create Room message MUST contain the name of the room to be created. A room name is a Label and MUST follow [[label][Label]] conventions.
+
+*** Usage
+
+A Create Room message is sent by the client to request that the server allocate
+resources for a new room.
+
+A Create Room message may only be sent to the server after a Connect message is
+sent and acknowledged.
+
+*** Response
+
+The server MUST respond with an identical message with a status of ~OK~ and an error of ~NO_ERROR~ if the room created successfully.
+
+If the room cannot be created, the server MUST respond with a status of ~Error~ and the appropriate error message, see [[error_codes][Error Codes]].
+
+
+** Join Room
+ <<join_room>>
+
+This message adds a user to a room. After acknowledgment, the user MUST be
+subscribed to all messages sent to the room until the user sends a [[leave_room][Leave Room]]
+message.
+
+*** Message Format
+
+The initial fields of this message are identical to the format in [[core_fields][Core Message
+Fields]].
+
+In addition to the fields from [[core_fields][Core Message Fields]], a Join Room message MUST
+contain he name of the room to join.
+
+*** Usage
+
+A Join Room message is sent by the client to request that the server subscribe
+to the user to a particular room.
+
+A Join Room message may only be sent to the server after Connect message is sent
+and acknowledged.
+
+*** Response
+
+The server MUST respond with an identical message with a status of ~OK~ and an
+error of ~NO_ERROR~ if the user can be subscribed to a room.
+
+If the user cannot join the room, the server MUST respond with a status of
+~Error~ and the appropriate error message, see [[error_codes][Error Codes]].
+
+** Leave Room
+<<leave_room>>
+
+This message unsubscribes a user from a room. After acknowledgment the user MUST
+no longer receive messages sent to the room unless the user re-subscribes using
+[[join_room][Join Room]].
+
+*** Message Format
+
+The initial fields of this message are identical to the format in [[core_fields][Core Message
+Fields]].
+
+In addition to the fields from [[core_fields][Core Message Fields]], a Leave Room message MUST
+contain the name of the room being left.
+
+*** Usage
+
+A Leave Room message is sent by the client to request that the server remove the
+user from subscription to a room.
+
+A Leave Room message may only be sent to the server after a Connect message is
+sent and acknowledged.
+
+*** Response
+
+The server MUST respond with an identical message with a status of ~OK~ and an
+error of ~NO_ERROR~ if the user's subscription can be removed from a room.
+
+If the user is not currently subscribed to the room, the server MAY either
+ignore the message or send a message with a status of ~Error~ and an error code
+of ~MALFORMED_MESSAGE~.
+
+** Message Room
+<<message_room>>
+
+Sent when a user wants to send a message to all users subscribed to a particular
+room.
+
+*** Message Format
+
+The initial fields of this message are identical to the format in [[core_fields][Core Message
+Fields]].
+
+In addition to the fields from [[core_fields][Core Message Fields]], a Message Room message includes additional fields for the ~room~ to message and the ~message~ to be sent.
+
+*** Usage
+
+The Message Room message is used when one user wishes to communicate with all users subscribed to a specific room. If the room does not exist, or the server is busy, the user will receive an error message from the server.
+
+Otherwise, the server will respond with a successful acknowledgment and the message will be sent to all users subscribed to the channel.
+
+*** Response
+
+The server MUST respond with an identical message with a status of ~OK~ and an error of ~NO_ERROR~ if the message is sent correctly.
+
+If there is an error sending the message, the server MAY choose to respond with a status of ~ERROR~ and an error that indicates the cause of the error.
+
+Upon receipt of the message, the server MUST broadcast the message to all other users subscribed to the room. If a timeout occurs, the server MAY choose to disconnect that user as if they had sent a [[disconnect][Disconnect]] message.
+
+** List Rooms
+<<list_rooms>>
+
+This message provides a list of rooms to the user.
+
+*** Message Format
+
+The initial fields of this message are identical to the format in [[core_fields][Core Message
+Fields]].
+
+In addition to the fields from [[core_fields][Core Message Fields]], a List Rooms message
+includes a field for a list of rooms. Messages sent from the client MUST leave
+the ~rooms~ field empty. Messages sent from the server MAY have data populated
+in the ~rooms~ field.
+
+*** Usage
+
+The List Rooms message is used whenever the client wants to see a list of rooms
+that are available to join. If no rooms exist, the user will receive an empty
+list back from the server.
+
+*** Response
+
+The server MUST respond with an identical message (barring the ~rooms~ field)
+with a status of ~OK~ and an error of ~NO_ERROR~.
+
+The rooms field MUST be a comma separated list of rooms. Room names MUST conform
+to the rules set out in [[labels][Labels]].
+
+** List Users
+<<list_users>>
+
+This message provides the ability for a user to list all users present on the server.
+
+*** Message Format
+
+The initial fields of this message are identical to the format in [[core_fields][Core Message
+Fields]].
+
+In addition to the fields from [[core_fields][Core Message Fields]], a List Users message
+includes a field for a list of users. Messages sent from the client MUST leave
+the ~users~ field empty. Messages sent from the server MAY have data populated
+in the ~users~ field.
+
+*** Usage
+
+The List Users message is used whenever a client wants to see a list of other
+users present on a server. If no other users are present, the user will receive
+an empty list of users from the server.
+
+*** Response
+
+The server MUST respond with an identical message (barring the ~users~ field)
+with a status of ~OK~ and an error of ~NO_ERROR~.
+
+The users field MUST be a comma separate list of users. User names MUST conform
+to the rules set out in [[labels][Labels]].
+
+** Private Message
+<<private_message>>
+
+Sent by the client to send a private message to another user.
+
+*** Message Format
+
+*** Usage
+
+*** Response
+
+** Broadcast
+<<broadcast>>
+
+*** Message Format
+
+*** Usage
+
+*** Response

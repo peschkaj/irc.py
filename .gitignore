@@ -99,3 +99,10 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+
+# org stuff
+*.tex
+*.pdf
+.#*
+auto/**
