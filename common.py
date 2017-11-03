@@ -156,21 +156,21 @@ class IrcPacket(object):
 class Connect(IrcPacket):
     def __init__(self,
                  username: str,
-                 server: str = "127.0.0.1",
-                 port: int = 8080,
                  timestamp: datetime = datetime.datetime.utcnow(),
                  status: Status = Status.OK,
                  error: Error = Error.NO_ERROR):
         super().__init__(Operations.SERVER_JOIN, username, timestamp, status,
                          error)
-        self.server = server
-        self.port = port
 
     def __str__(self):
-        return "{1}{0}{2}{0}{3}{0}{4}{0}{5}{0}{6}{0}{7}".format(
-            UNIT_SEPARATOR, self.opcode.value, self.status.value,
-            self.error.value, self.username,
-            self.timestamp.isoformat(), self.server, self.port)
+        return "{1}{0}{2}{0}{3}{0}{4}{0}{5}".format(
+            UNIT_SEPARATOR,
+            self.opcode.value,
+            self.status.value,
+            self.error.value,
+            self.username,
+            self.timestamp.isoformat(),
+        )
 
     def encode(self):
         return (self.__str__() + "\n").encode()
@@ -377,8 +377,7 @@ def decode(packet: bytes):
 
     # field order: opcode, status, error, username, timestamp
     if msg_type == 1:
-        return Connect(pieces[3], pieces[5],
-                       int(pieces[6]),
+        return Connect(pieces[3],
                        dateutil.parser.parse(pieces[4]),
                        Status(int(pieces[1])), Error(int(pieces[2])))
     elif msg_type == 2:
@@ -431,7 +430,7 @@ def decode(packet: bytes):
 
 class TestCommon(unittest.TestCase):
     def test_Connect(self):
-        p = Connect("some_user", "localhost", 8080)
+        p = Connect("some_user")
         ep = p.encode()
         dp = decode(ep)
         self.assertEqual(p, dp)
