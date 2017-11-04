@@ -368,25 +368,79 @@ an empty list of users from the server.
 The server MUST respond with an identical message (barring the ~users~ field)
 with a status of ~OK~ and an error of ~NO_ERROR~.
 
-The users field MUST be a comma separate list of users. User names MUST conform
+The ~users~ field MUST be a comma separated list of user names. User names MUST conform
 to the rules set out in [[labels][Labels]].
 
 ** Private Message
 <<private_message>>
 
-Sent by the client to send a private message to another user.
+Used by the client to send a private message to another user.
 
 *** Message Format
 
+The initial fields of this message are identical to the format in [[core_fields][Core Message
+Fields]].
+
+In addition to the fields from [[core_fields][Core Message Fields]], a Private Message contains at ~to~ field (a string) and a ~message~ field (also a string). The ~to~ field MUST conform to the rules set out in [[labels][Labels]].
+
 *** Usage
 
+The Private Message is used to initiate or continue a private conversation with another user. If the recipient is not connected to the server, the server MUST return a failure message.
+
 *** Response
+
+For successful delivery where the target user (~to~) is online, the server MUST respond to the sender with an identical message with a status of ~OK~ and an error of ~NO_ERROR~.
+
+If the target user is not online, the server MUST respond to the sender with a status of ~ERROR~ and an error of ~USER_NOT_FOUND~.
 
 ** Broadcast
 <<broadcast>>
 
+Broadcasts a message to all users and rooms.
+
 *** Message Format
+
+The initial fields of this message are identical to the format in [[core_fields][Core Message
+Fields]].
+
+In addition to the fields from [[core_fields][Core Message Fields]], a Broadcast contains a ~message~ field (a string).
 
 *** Usage
 
+The Broadcast message is used to send a message to all users and rooms. All
+online users MUST receive the message via a combination of rooms and private
+message. The Broadcast message MUST NOT be visible in existing private messaging
+conversations.
+
 *** Response
+
+    The server MUST respond to the sender with an identical message with a
+    status of ~OK~ and an error of ~NO_ERROR~.
+
+* Error Handling
+
+Keep alive messages are not used to detect when the socket connection linking
+client and server is terminated. Instead, the client and server SHOULD detect
+when the socket connection is unavailable by responding to timeouts. The client
+MAY attempt reconnection automatically at the discretion of the client developer
+and the user.
+
+If the server detects that the client connection has been lost, the server MUST
+remove the client from all rooms which they have joined and free up the client's
+username for reconnection.
+
+* Security Consideration
+
+This system provides no end-to-end wire security functionality. This could be
+achieved adding SSL connectivity on the wire. The difficulty of this approach is
+that SSL requires trust in certificates and any compromise of the server would
+require updating all clients before they are able to connect (in the event of a
+compromised security certificate).
+
+No care is taken to ensure that private messages are encrypted in a way that
+they are invisible to the server operator. It is possible for a malicious
+operator to view all messages being sent through the server. End-to-end
+encryption support could be added, but this would make the protocol slightly
+more complex. Additional support would need to be added for key exchange.
+
+* Extra Features
