@@ -1,10 +1,13 @@
 #+TITLE: CS594 RFC
-#+AUTHOR: Jeremiah Peschka <jpeschka@pdx.edu>
+#+AUTHOR: Jeremiah Peschka
 #+STARTUP: showall indent
-#+OPTIONS: usepackage{enumerate,parskip,fancyvrb,fancyhdr}
-#+OPTIONS: pagestyle{fancy}
-#+OPTIONS: lhead{CS594}
-#+OPTIONS: rhead{IRC Class Project Specification}
+#+OPTIONS: toc:nil
+#+LATEX_CLASS: article
+#+LATEX_CLASS_OPTIONS: [rfc]
+#+LATEX_HEADER: \usepackage{enumerate,parskip,fancyvrb,fancyhdr}
+#+LATEX_HEADER: \pagestyle{fancy}
+#+LATEX_HEADER: \lhead{CS594}
+#+LATEX_HEADER: \rhead{IRC Class Project Specification}
 
 * Status of this Memo
 
@@ -49,6 +52,9 @@ This memo describes the communication protocol for an IRC-like client-server
 application for the Internetworking Protocols course (CS494/594) at Portland
 State University.
 
+#+TOC: headlines 2
+\clearpage
+
 * Introduction
 
 This document describes a simple Internet Relay Chat (IRC) like protocol where
@@ -62,6 +68,21 @@ all users currently subscribed to that room.
 Users can send a private message to another user by knowing that user's name.
 
 Users can broadcast a message to all users of the system.
+
+* Conventions Used in this Document
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD",
+"SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be
+interpreted as described in RFC 2119 [RFC2119].
+
+In this document, these words will appear with that interpretation only when in
+ALL CAPS. Lower case uses of these words are not to be interpreted as carrying
+significance described in RFC 2119.
+
+In this document, the characters ">>" preceding an indented line(s) indicates a
+statement using the key words listed above. This convention aids reviewers in
+quickly identifying or finding the portions of this RFC covered by these
+keywords.
 
 * Basic Information
 
@@ -85,7 +106,10 @@ server will send an error code to the client.
 
 ** General Message Format
 
-Messages are sent over the wire as UTF-8 byte arrays. In this document, "byte array" and "byte string" are used interchangeably. Messages are terminated with a newline character. Message fields are delimited by the ASCII unit separator character (character code 31).
+Messages are sent over the wire as UTF-8 byte arrays. In this document, "byte
+array" and "byte string" are used interchangeably. Messages are terminated with
+a newline character. Message fields are delimited by the ASCII unit separator
+character (character code 31).
 
 *** Core Message fields
 <<core_fields>>
@@ -102,11 +126,11 @@ timestamp
 
 *** Field Definitions
 
-*~opcode~* - specifies the type of message.
-*~status~* - status response from the server (OK or error).
-*~error~* - The error type. Indicates a more specific error code. This field can be ignored when status is OK, however its value should be ~NO_ERROR~ in that case.
-*~username~* - The name of the user initiating the message.
-*~timestamp~* - The time the message was created, stored as a string in ISO 8601 format.
+- *~opcode~* - specifies the type of message.
+- *~status~* - status response from the server (OK or error).
+- *~error~* - The error type. Indicates a more specific error code. This field can be ignored when status is OK, however its value should be ~NO_ERROR~ in that case.
+- *~username~* - The name of the user initiating the message.
+- *~timestamp~* - The time the message was created, stored as a string in ISO 8601 format.
 
 *** Operation Codes
 <<opcodes>>
@@ -143,7 +167,8 @@ ROOM_ALREADY_EXISTS = 6
 Both user and room names are considered to be labels. The following rules apply
 to valid labels:
 
-- Any ASCII or UTF-8 character is allowed except the ASCII record separator, spaces, and commas.
+- Any ASCII or UTF-8 character is allowed except the ASCII record separator,
+  spaces, and commas.
 - Must be at least 3 characters.
 
 \clearpage
@@ -161,7 +186,8 @@ This MUST be the first message sent to the server.
 
 *** Usage
 
-    Before additional messages can be sent, the client MUST provide a user name to the server and receive acknowledgment.
+Before additional messages can be sent, the client MUST provide a user name to
+the server and receive acknowledgment.
 
 The server MUST associate the client's user name with the socket connection to
 the client. A ~Connect~ message SHOULD be sent only once. If the server receives
@@ -188,7 +214,8 @@ The message format is identical to the format in [[core_fields][Core Message Fie
 
 *** Usage
 
-Once the Disconnect message is sent, the user SHOULD no longer be able to send messages to the server.
+Once the Disconnect message is sent, the user SHOULD no longer be able to send
+messages to the server.
 
 Any additional messages sent by the client MUST be ignored.
 
@@ -206,7 +233,9 @@ to other users until the room is destroyed.
 
 The initial fields of this message are identical to the format in [[core_fields][Core Message Fields]].
 
-In addition to the fields from [[core_fields][Core Message Fields]], a Create Room message MUST contain the name of the room to be created. A room name is a Label and MUST follow [[label][Label]] conventions.
+In addition to the fields from [[core_fields][Core Message Fields]], a Create Room message MUST
+contain the name of the room to be created. A room name is a Label and MUST
+follow [[label][Label]] conventions.
 
 *** Usage
 
@@ -218,10 +247,11 @@ sent and acknowledged.
 
 *** Response
 
-The server MUST respond with an identical message with a status of ~OK~ and an error of ~NO_ERROR~ if the room created successfully.
+The server MUST respond with an identical message with a status of ~OK~ and an
+error of ~NO_ERROR~ if the room created successfully.
 
-If the room cannot be created, the server MUST respond with a status of ~Error~ and the appropriate error message, see [[error_codes][Error Codes]].
-
+If the room cannot be created, the server MUST respond with a status of ~Error~
+and the appropriate error message, see [[error_codes][Error Codes]].
 
 ** Join Room
  <<join_room>>
@@ -297,21 +327,30 @@ room.
 The initial fields of this message are identical to the format in [[core_fields][Core Message
 Fields]].
 
-In addition to the fields from [[core_fields][Core Message Fields]], a Message Room message includes additional fields for the ~room~ to message and the ~message~ to be sent.
+In addition to the fields from [[core_fields][Core Message Fields]], a Message Room message
+includes additional fields for the ~room~ to message and the ~message~ to be
+sent.
 
 *** Usage
 
-The Message Room message is used when one user wishes to communicate with all users subscribed to a specific room. If the room does not exist, or the server is busy, the user will receive an error message from the server.
+The Message Room message is used when one user wishes to communicate with all
+users subscribed to a specific room. If the room does not exist, or the server
+is busy, the user will receive an error message from the server.
 
-Otherwise, the server will respond with a successful acknowledgment and the message will be sent to all users subscribed to the channel.
+Otherwise, the server will respond with a successful acknowledgment and the
+message will be sent to all users subscribed to the channel.
 
 *** Response
 
-The server MUST respond with an identical message with a status of ~OK~ and an error of ~NO_ERROR~ if the message is sent correctly.
+The server MUST respond with an identical message with a status of ~OK~ and an
+error of ~NO_ERROR~ if the message is sent correctly.
 
-If there is an error sending the message, the server MAY choose to respond with a status of ~ERROR~ and an error that indicates the cause of the error.
+If there is an error sending the message, the server MAY choose to respond with
+a status of ~ERROR~ and an error that indicates the cause of the error.
 
-Upon receipt of the message, the server MUST broadcast the message to all other users subscribed to the room. If a timeout occurs, the server MAY choose to disconnect that user as if they had sent a [[disconnect][Disconnect]] message.
+Upon receipt of the message, the server MUST broadcast the message to all other
+users subscribed to the room. If a timeout occurs, the server MAY choose to
+disconnect that user as if they had sent a [[disconnect][Disconnect]] message.
 
 ** List Rooms
 <<list_rooms>>
@@ -340,7 +379,7 @@ The server MUST respond with an identical message (barring the ~rooms~ field)
 with a status of ~OK~ and an error of ~NO_ERROR~.
 
 The rooms field MUST be a comma separated list of rooms. Room names MUST conform
-to the rules set out in [[labels][Labels]].
+to the rules set out in [[label][Labels]].
 
 ** List Users
 <<list_users>>
@@ -369,7 +408,7 @@ The server MUST respond with an identical message (barring the ~users~ field)
 with a status of ~OK~ and an error of ~NO_ERROR~.
 
 The ~users~ field MUST be a comma separated list of user names. User names MUST conform
-to the rules set out in [[labels][Labels]].
+to the rules set out in [[label][Labels]].
 
 ** Private Message
 <<private_message>>
@@ -381,17 +420,24 @@ Used by the client to send a private message to another user.
 The initial fields of this message are identical to the format in [[core_fields][Core Message
 Fields]].
 
-In addition to the fields from [[core_fields][Core Message Fields]], a Private Message contains at ~to~ field (a string) and a ~message~ field (also a string). The ~to~ field MUST conform to the rules set out in [[labels][Labels]].
+In addition to the fields from [[core_fields][Core Message Fields]], a Private Message contains
+at ~to~ field (a string) and a ~message~ field (also a string). The ~to~ field
+MUST conform to the rules set out in [[label][Labels]].
 
 *** Usage
 
-The Private Message is used to initiate or continue a private conversation with another user. If the recipient is not connected to the server, the server MUST return a failure message.
+The Private Message is used to initiate or continue a private conversation with
+another user. If the recipient is not connected to the server, the server MUST
+return a failure message.
 
 *** Response
 
-For successful delivery where the target user (~to~) is online, the server MUST respond to the sender with an identical message with a status of ~OK~ and an error of ~NO_ERROR~.
+For successful delivery where the target user (~to~) is online, the server MUST
+respond to the sender with an identical message with a status of ~OK~ and an
+error of ~NO_ERROR~.
 
-If the target user is not online, the server MUST respond to the sender with a status of ~ERROR~ and an error of ~USER_NOT_FOUND~.
+If the target user is not online, the server MUST respond to the sender with a
+status of ~ERROR~ and an error of ~USER_NOT_FOUND~.
 
 ** Broadcast
 <<broadcast>>
@@ -403,7 +449,8 @@ Broadcasts a message to all users and rooms.
 The initial fields of this message are identical to the format in [[core_fields][Core Message
 Fields]].
 
-In addition to the fields from [[core_fields][Core Message Fields]], a Broadcast contains a ~message~ field (a string).
+In addition to the fields from [[core_fields][Core Message Fields]], a Broadcast contains a
+~message~ field (a string).
 
 *** Usage
 
@@ -443,4 +490,20 @@ operator to view all messages being sent through the server. End-to-end
 encryption support could be added, but this would make the protocol slightly
 more complex. Additional support would need to be added for key exchange.
 
-* Extra Features
+* IANA Considerations
+
+None
+
+** Normative References
+
+[RFC2119] Bradner, S., "Key words for use in RFCs to Indicate Requirement Levels", BCP 14, RFC 2119, March 1997.
+
+\clearpage
+* Author's Address
+
+Jeremiah Peschka \\
+Portland State University Computer Science \\
+1825 SW Broadway \\
+Portland, OR 97201 \\
+
+Email: jpeschka@pdx.edu
