@@ -27,9 +27,10 @@ import signal
 
 
 class User(object):
-    def __init__(self, nick, host):
+    def __init__(self, nick: str, host: str, port: int):
         self.nick = nick
         self.host = host
+        self.port = port
 
 
 class Room(object):

@@ -156,19 +156,22 @@ class IrcPacket(object):
 class Connect(IrcPacket):
     def __init__(self,
                  username: str,
+                 port: int,
                  timestamp: datetime = datetime.datetime.utcnow(),
                  status: Status = Status.OK,
                  error: Error = Error.NO_ERROR):
         super().__init__(Operations.SERVER_JOIN, username, timestamp, status,
                          error)
+        self.port = port
 
     def __str__(self):
-        return "{1}{0}{2}{0}{3}{0}{4}{0}{5}".format(
+        return "{1}{0}{2}{0}{3}{0}{4}{0}{5}{0}{6}".format(
             UNIT_SEPARATOR,
             self.opcode.value,
             self.status.value,
             self.error.value,
             self.username,
+            self.port,
             self.timestamp.isoformat(),
         )
 
@@ -378,7 +381,8 @@ def decode(packet: bytes):
     # field order: opcode, status, error, username, timestamp
     if msg_type == 1:
         return Connect(pieces[3],
-                       dateutil.parser.parse(pieces[4]),
+                       int(pieces[4]),
+                       dateutil.parser.parse(pieces[5]),
                        Status(int(pieces[1])), Error(int(pieces[2])))
     elif msg_type == 2:
         return Disconnect(pieces[3],
@@ -430,7 +434,7 @@ def decode(packet: bytes):
 
 class TestCommon(unittest.TestCase):
     def test_Connect(self):
-        p = Connect("some_user")
+        p = Connect("some_user", 8081)
         ep = p.encode()
         dp = decode(ep)
         self.assertEqual(p, dp)
