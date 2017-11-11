@@ -97,7 +97,7 @@ class IRCServer(socketserver.StreamRequestHandler):
     def handle_disconnect(packet: common.Disconnect):
         for user in USERS:
             if user.nick == packet.username:
-                USERS.removegs(user)
+                USERS.remove(user)
                 for room in ROOMS:
                     room.remove_user(packet.username)
                 packet.status = common.Status.OK
