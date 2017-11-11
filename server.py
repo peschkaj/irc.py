@@ -58,12 +58,13 @@ class Room(object):
         return self.room.name
 
 
-USERS: List[User] = []
-ROOMS: List[Room] = []
+USERS: List[User] = list()
+ROOMS: List[Room] = list()
 
-LISTEN_ADDRESS = "0.0.0.0"
+LISTEN_ADDRESS = "127.0.0.1"
 LISTEN_PORT = 8080
 SERVER_SOCKET = None
+DEBUG = True
 
 
 # TODO: This needs to send all users a message that they're being removed
@@ -71,7 +72,7 @@ SERVER_SOCKET = None
 def interrupt_handler(signal, frame):
     SERVER_SOCKET.close()
     for user in USERS:
-        IRCServer.send_packet(common.Disconnect, user)
+        IRCServer.send_message(common.Disconnect, user)
     sys.exit(0)
 
 
@@ -87,7 +88,7 @@ class IRCServer(socketserver.StreamRequestHandler):
                 packet.error = common.Error.USER_ALREADY_EXISTS
                 return packet
 
-        USERS.append((packet.username, address[0]))
+        USERS.append(User(packet.username, address[1], packet.port))
         packet.status = common.Status.OK
         packet.error = common.Error.NO_ERROR
         return packet
@@ -122,15 +123,18 @@ class IRCServer(socketserver.StreamRequestHandler):
 
     @staticmethod
     def handle_join_room(packet: common.JoinRoom):
+        print("In handle_join_room")
         for room in ROOMS:
             if room.name == packet.room:
+                if DEBUG:
+                    print("found room")
                 room.add_to_room(packet.username)
                 packet.status = common.Status.OK
                 packet.error = common.Error.NO_ERROR
                 return packet
 
         packet.status = common.Status.ERROR
-        packet.status = common.Error.ROOM_NOT_FOUND
+        packet.error = common.Error.ROOM_NOT_FOUND
         return packet
 
     @staticmethod
@@ -147,8 +151,12 @@ class IRCServer(socketserver.StreamRequestHandler):
         return packet
 
     def handle_message_room(self, packet: common.MessageRoom):
+        if DEBUG:
+            print("In handle_message_room")
         for room in ROOMS:
             if room.name == packet.room:
+                if DEBUG:
+                    print("  Found room")
                 for user in USERS:
                     if room.contains_user(user.nick):
                         self.send_message(packet, user)
@@ -189,9 +197,14 @@ class IRCServer(socketserver.StreamRequestHandler):
 
     @staticmethod
     def send_message(packet: common.IrcPacket, user: User):
+        if DEBUG:
+            print("In send_message " + packet.__str__())
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect((LISTEN_ADDRESS, LISTEN_PORT + 100))
+            if DEBUG:
+                print("\tSending message to " + user.host + ":" + str(
+                    user.port))
+            s.connect((user.host, user.port))
             s.send(packet.encode())
             s.close()
         except socket.error as e:
@@ -203,16 +216,17 @@ class IRCServer(socketserver.StreamRequestHandler):
 
     def handle_broadcast(self, packet: common.Broadcast):
         for user in USERS:
-            self.send_packet(packet, user)
+            self.send_message(packet, user)
         return packet
 
     def handle(self):
-        input = self.rfile.readline().decode().strip()
+        #input = self.rfile.readline().decode().strip()
+        new_input = self.rfile.readline()
 
         address = self.connection.getpeername()
 
         try:
-            message = common.decode(input)
+            message = common.decode(new_input)
         except TypeError as te:
             print("Error processing packet: '" + input + "' generated error '"
                   + te.__str__() + "'")
@@ -226,10 +240,12 @@ class IRCServer(socketserver.StreamRequestHandler):
             elif isinstance(message, common.CreateRoom):
                 message = self.handle_create_room(message)
             elif isinstance(message, common.JoinRoom):
+                print("***Received Join Room***")
                 message = self.handle_join_room(message)
             elif isinstance(message, common.LeaveRoom):
                 message = self.handle_leave_room(message)
             elif isinstance(message, common.MessageRoom):
+                print("***Received Message Room***")
                 message = self.handle_message_room(message)
             elif isinstance(message, common.ListRooms):
                 message = self.handle_list_rooms(message)
@@ -255,4 +271,6 @@ if __name__ == "__main__":
     with socketserver.ThreadingTCPServer((LISTEN_ADDRESS, LISTEN_PORT),
                                          IRCServer) as server:
         SERVER_SOCKET = server.socket
+        print("Server started on " + str(LISTEN_ADDRESS) + ":" +
+              str(LISTEN_PORT))
         server.serve_forever()

@@ -377,6 +377,7 @@ class Broadcast(IrcPacket):
 def decode(packet: bytes):
     pieces = packet.decode().strip().split(UNIT_SEPARATOR)
     msg_type = int(pieces[0])
+    pieces[-1] = pieces[-1].strip()
 
     # field order: opcode, status, error, username, timestamp
     if msg_type == 1:
@@ -401,6 +402,7 @@ def decode(packet: bytes):
                          dateutil.parser.parse(pieces[4]),
                          Status(int(pieces[1])), Error(int(pieces[2])))
     elif msg_type == 6:
+        print("\tpacket is: " + packet.decode())
         return MessageRoom(pieces[5], pieces[6], pieces[3],
                            dateutil.parser.parse(pieces[4]),
                            Status(int(pieces[1])), Error(int(pieces[2])))

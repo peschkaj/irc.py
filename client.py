@@ -20,12 +20,20 @@
 
 import common
 from datetime import datetime
-import threading
+import random
 import socket
 import socketserver
 import sys
+import threading
+from typing import Tuple, List
 
-USAGE = """Usage: python3 client.py <nick> [<server> <port>]"""
+USAGE = """Usage: python3 client.py <nick> [<server> <port> [<low_port> <high_port>]]
+
+    <low_port> and <high_port> are used to designate a random port for
+    the client to listen on. If they are not supplied, the default values
+    of 45679 and 45965 are used for the range. These ports are listed as
+    available on macOS 10.13
+"""
 
 helptext = """Available Commands:
 /quit                  Disconnect from the server and quit this program
@@ -38,20 +46,66 @@ helptext = """Available Commands:
 /bcast <message>       Sends <message> to all users
 """
 
-SERVER_ADDRESS = "127.0.0.1"
-SERVER_PORT = 8080
+INVALID_COMMAND = """
+Invalid command. You can always type /help for a list of valid commands
+and their usage. Here, let me do that for you now...
+"""
+
+USERNAME: str = ""
+SERVER_ADDRESS: str = "127.0.0.1"
+SERVER_PORT: int = 8080
+LOW_PORT: int = 45679
+HIGH_PORT: int = 45965
+LISTEN_PORT: int
+SERVER: Tuple[str, int]
 
 DEBUG = True
 
 
 class IRCClient(socketserver.StreamRequestHandler):
-    def __init__(self, nick: str, host: str, port: int):
-        self.nick = nick
-        self.server = (host, port)
+    def handle(self):
+        try:
+            data = self.rfile.readline()
+            message = common.decode(data.decode().strip())
 
-    def connect_and_spin(self):
-        self.connect()
-        self.spin()
+            self.handle_server_message(message)
+        except SystemError as se:
+            print("System error encountered!")
+            print(se)
+            sys.exit(1)
+
+    def handle_server_message(self, message: common.IrcPacket):
+        if isinstance(message, common.Connect):
+            print("Connection successful!")
+        elif isinstance(message, common.Disconnect):
+            print("You have been disconnected. Goodbye!")
+            sys.exit()
+        elif isinstance(message, common.CreateRoom):
+            self.display_status_message("Room " + message.room + " created",
+                                        message.timestamp)
+        elif isinstance(message, common.JoinRoom):
+            self.display_status_message("Joined " + message.room,
+                                        message.timestamp)
+        elif isinstance(message, common.LeaveRoom):
+            self.display_status_message("Left " + message.room,
+                                        message.timestamp)
+        elif isinstance(message, common.MessageRoom):
+            self.display_message(message.room, message.username,
+                                 message.timestamp)
+        elif isinstance(message, common.ListRooms):
+            self.display_status_message(
+                "Rooms available:" + "\n\t".join(message.rooms),
+                message.timestamp)
+        elif isinstance(message, common.ListUsers):
+            self.display_status_message(
+                "Users available:" + "\n\t".join(message.users),
+                message.timestamp)
+        elif isinstance(message, common.PrivateMessage):
+            self.display_private_message(message.username, message.to,
+                                         message.message, message.timestamp)
+        elif isinstance(message, common.Broadcast):
+            self.display_broadcast(message.username, message.message,
+                                   message.timestamp)
 
     def connect(self):
         connect = common.Connect(self.nick)
@@ -63,52 +117,6 @@ class IRCClient(socketserver.StreamRequestHandler):
         if result.status != common.Status.OK:
             self.display_error("Unable to connect: ", result.error)
             exit(1)
-
-    # TODO implement spin()
-    #      This should collect user input and enter an endless loop
-
-    def send_message(self, packet):
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect(self.server)
-            s.send(packet.encode())
-            response = common.decode(s.makefile('r').readline().strip())
-            s.close()
-
-            if isinstance(response, common.Connect):
-                print("Connection successful!")
-            elif isinstance(response, common.Disconnect):
-                print("Goodbye!")
-                sys.exit()
-            elif isinstance(response, common.CreateRoom):
-                self.display_status_message(
-                    "Room " + response.room + " created", response.timestamp)
-            elif isinstance(response, common.JoinRoom):
-                self.display_status_message("Joined " + response.room,
-                                            response.timestamp)
-            elif isinstance(response, common.LeaveRoom):
-                self.display_status_message("Left " + response.room,
-                                            response.timestamp)
-            elif isinstance(response, common.MessageRoom):
-                self.display_message(response.room, response.username,
-                                     response.timestamp)
-            elif isinstance(response, common.ListRooms):
-                self.display_status_message(
-                    "Rooms available:" + "\n\t".join(response.rooms),
-                    response.timestamp)
-            elif isinstance(response, common.ListUsers):
-                self.display_status_message(
-                    "Users available:" + "\n\t".join(response.users),
-                    response.timestamp)
-            elif isinstance(response, common.PrivateMessage):
-                self.display_private_message(response.username, response.to,
-                                             response.message,
-                                             response.timestamp)
-            elif isinstance(response, common.Broadcast):
-                self.display_broadcast(response.username, response.message,
-                                       response.timestamp)
-        except TypeError as te:
-            print("Error parsing response from server: '" + te.__str__() + "'")
 
     def display_message(self,
                         room: str,
@@ -141,18 +149,251 @@ class IRCClient(socketserver.StreamRequestHandler):
               + ">: " + message)
 
 
+def event_loop(username, port):
+    while True:
+        connect_request = common.Connect(username, port)
+        send_message(connect_request)
+
+        if connect_request.error == common.Error.NO_ERROR:
+            break
+        elif connect_request.error == common.Error.USER_ALREADY_EXISTS:
+            print("Username already in use on the server")
+            username = input("New username: ").strip()
+            while username.find(' ') != -1 and username.find(
+                    common.UNIT_SEPARATOR) != -1:
+                print("Illegal characters in username.")
+                username = input("New username: ").strip()
+
+    while True:
+        command = input(username + "> ").strip()
+        if command == "/quit":
+            quit_server()
+            break
+        elif command.startswith("/create"):
+            create_room(command)
+        elif command.startswith("/join"):
+            join_room(command)
+        elif command.startswith("/msg"):
+            message_room(command)
+        elif command == "/ls rooms":
+            list_rooms()
+        elif command == "/ls users":
+            list_users()
+        elif command.startswith("/pm"):
+            private_message(command)
+        elif command.startswith("/bcast"):
+            broadcast(command)
+        elif command == "/help":
+            print(helptext)
+        else:
+            print(INVALID_COMMAND)
+            print(helptext)
+
+
+def quit_server():
+    disco = common.Disconnect(USERNAME)
+    send_message(disco)
+    print("Exiting program")
+
+
+def create_room(command: str):
+    room = command[8:].strip()
+    if len(room) < 1:
+        print("You didn't enter a valid room name.")
+        return
+    if room.find(' ') != -1:
+        print("Invalid room name, no spaces allowed")
+        return
+    cr = common.CreateRoom(room, USERNAME)
+    send_message(cr)
+
+
+def join_room(command: str):
+    room = command[5:].strip()
+    if len(room) < 1 or room.find(' ') != -1:
+        print("Enter a valid room name")
+        return
+    jr = common.JoinRoom(room, USERNAME)
+    send_message(jr)
+
+
+def message_room(command: str):
+    command = command[4:].strip()
+    parts = command.split(' ')
+    if len(parts) < 2:
+        print("Enter a valid message")
+        return
+
+    room = parts[0]
+    message = " ".join(parts[1:])
+    if len(message) < 1 or message.find(common.UNIT_SEPARATOR) != -1:
+        print("Enter a valid message")
+        return
+
+    msg = common.MessageRoom(room, message, USERNAME)
+    send_message(msg)
+
+
+def list_rooms():
+    rooms: List[str] = list()
+    send_message(common.ListRooms(rooms, USERNAME))
+
+
+def list_users():
+    users: List[str] = list()
+    send_message(common.ListUsers(users, USERNAME))
+
+
+def private_message(command: str):
+    command = command[3:].strip()
+    parts = command.split(' ')
+    if len(parts) < 2:
+        print("Enter a valid private message.")
+        print("Format: /pm <to> <message")
+
+    to = parts[0]
+    message = " ".join(parts[1:])
+
+    if len(message) < 1 or gsmessage.find(common.UNIT_SEPARATOR) != -1:
+        print("Enter a valid message")
+        return
+
+    pm = common.PrivateMessage(USERNAME, to, message)
+    send_message(pm)
+
+
+def broadcast(command: str):
+    message = command[6:].strip()
+    if len(message) < 1 or message.find(' ') != -1 or message.find(
+            common.UNIT_SEPARATOR) != -1:
+        print("Enter a valid message")
+        return
+
+    bcast = common.Broadcast(message, USERNAME)
+    send_message(bcast)
+
+
+def send_message(packet: common.IrcPacket):
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect(SERVER)
+        s.send(packet.encode())
+        raw_response = s.makefile('r').readline()
+
+        if DEBUG:
+            print("Received message from server: '" + raw_response + "'")
+
+        response = common.decode(raw_response.encode())
+        s.close()
+
+        handle_message(response)
+    except TypeError as te:
+        print("Error parsing response from server: '" + te.__str__() + "'")
+
+
+def handle_message(message: common.IrcPacket):
+    if DEBUG:
+        print("In handle_message")
+
+    if isinstance(message, common.Connect):
+        print("Connection successful!")
+    elif isinstance(message, common.Disconnect):
+        print("You have been disconnected. Goodbye!")
+        sys.exit()
+    elif isinstance(message, common.CreateRoom):
+        display_status_message("Room " + message.room + " created",
+                               message.timestamp)
+    elif isinstance(message, common.JoinRoom):
+        if message.status == common.Status.OK:
+            display_status_message("Joined " + message.room, message.timestamp)
+        else:
+            display_error("Error joining room", message.error)
+    elif isinstance(message, common.LeaveRoom):
+        display_status_message("Left " + message.room, message.timestamp)
+    elif isinstance(message, common.MessageRoom):
+        display_message(message.room, message.username, message.message,
+                        message.timestamp)
+    elif isinstance(message, common.ListRooms):
+        display_status_message("Rooms available:" + "\n\t".join(message.rooms),
+                               message.timestamp)
+    elif isinstance(message, common.ListUsers):
+        display_status_message("Users available:" + "\n\t".join(message.users),
+                               message.timestamp)
+    elif isinstance(message, common.PrivateMessage):
+        display_private_message(message.username, message.to, message.message,
+                                message.timestamp)
+    elif isinstance(message, common.Broadcast):
+        display_broadcast(message.username, message.message, message.timestamp)
+
+
+def display_message(room: str,
+                    from_user: str,
+                    message: str,
+                    message_time: datetime = datetime.utcnow()):
+    print(message_time.isoformat() + " <" + room + "> " + from_user + ": " +
+          message)
+
+
+def display_status_message(message: str,
+                           message_time: datetime = datetime.utcnow()):
+    print(message_time.isoformat() + ": " + message)
+
+
+def display_error(preamble: str, error: common.Error):
+    print(preamble + ": " + error.to_string())
+
+
+def display_private_message(from_user: str,
+                            to_user: str,
+                            message: str,
+                            timestamp: datetime = datetime.utcnow()):
+    print(timestamp.isoformat() + " PM from " + from_user + ": " + message)
+
+
+def display_broadcast(from_user: str,
+                      message: str,
+                      timestamp: datetime = datetime.utcnow()):
+    print("\n" + timestamp.isoformat() + " BROADCAST\n\tFrom <" + from_user +
+          ">: " + message)
+
+
+def random_port_in_range(low: int, high: int):
+    return random.randrange(low, high)
+
+
 if __name__ == '__main__':
     argc = len(sys.argv)
 
     if argc == 2:
-        username = sys.argv[1]
-        server = SERVER_ADDRESS
-        port = SERVER_PORT
+        USERNAME = sys.argv[1].strip()
     elif argc == 4:
-        username = sys.argv[1]
-        server = sys.argv[2]
-        port = sys.argv[3]
+        USERNAME = sys.argv[1].strip()
+        SERVER_ADDRESS = sys.argv[2].strip()
+        SERVER_PORT = int(sys.argv[3].strip())
+        low_port = LOW_PORT
+        high_port = HIGH_PORT
+    elif argc == 6:
+        USERNAME = sys.argv[1].strip()
+        SERVER_ADDRESS = sys.argv[2].strip()
+        SERVER_PORT = int(sys.argv[3].strip())
+        LOW_PORT = int(sys.argv[4].strip())
+        HIGH_PORT = int(sys.argv[5].strip())
     else:
         print(USAGE)
         print(helptext)
         sys.exit()
+
+    LISTEN_PORT = random_port_in_range(LOW_PORT, HIGH_PORT)
+    SERVER = (SERVER_ADDRESS, SERVER_PORT)
+
+    print("Attempting to connect to " + str(SERVER_ADDRESS) + ":" +
+          str(SERVER_PORT))
+    print("Listening on port " + str(LISTEN_PORT))
+
+    client = socketserver.ThreadingTCPServer(("127.0.0.1", LISTEN_PORT),
+                                             IRCClient)
+    ct = threading.Thread(target=client.serve_forever)
+    ct.daemon = True
+    ct.start()
+
+    event_loop(USERNAME, LISTEN_PORT)
