@@ -91,7 +91,7 @@ class IRCClient(socketserver.StreamRequestHandler):
                                         message.timestamp)
         elif isinstance(message, common.MessageRoom):
             self.display_message(message.room, message.username,
-                                 message.timestamp)
+                                 message.message, message.timestamp)
         elif isinstance(message, common.ListRooms):
             self.display_status_message(
                 "Rooms available:" + "\n\t".join(message.rooms),

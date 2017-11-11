@@ -171,10 +171,11 @@ class IRCServer(socketserver.StreamRequestHandler):
     def handle_private_message(self, packet: common.PrivateMessage):
         if DEBUG:
             print("In handle_private_message")
+            print("\tmessage is: " + packet.__str__())
         for user in USERS:
             if user.nick == packet.to:
                 if DEBUG:
-                    print("Sending message to " + packet.to)
+                    print("\tSending message to " + packet.to)
                 self.send_message(packet, user)
                 return packet
 
