@@ -66,7 +66,7 @@ class IRCClient(socketserver.StreamRequestHandler):
     def handle(self):
         try:
             data = self.rfile.readline()
-            message = common.decode(data.decode().strip())
+            message = common.decode(data)
 
             self.handle_server_message(message)
         except SystemError as se:
@@ -254,11 +254,13 @@ def private_message(command: str):
     to = parts[0]
     message = " ".join(parts[1:])
 
-    if len(message) < 1 or gsmessage.find(common.UNIT_SEPARATOR) != -1:
+    if len(message) < 1 or message.find(common.UNIT_SEPARATOR) != -1:
         print("Enter a valid message")
         return
 
     pm = common.PrivateMessage(USERNAME, to, message)
+    if DEBUG:
+        print("\t" + pm.__str__())
     send_message(pm)
 
 

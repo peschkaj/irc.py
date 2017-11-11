@@ -29,7 +29,7 @@ import signal
 class User(object):
     def __init__(self, nick: str, host: str, port: int):
         self.nick = nick
-        self.host = host
+        self.host = host[0]
         self.port = port
 
 
@@ -68,7 +68,7 @@ DEBUG = True
 
 
 # TODO: This needs to send all users a message that they're being removed
-# TODO: This needs to close down the server socket
+# TODO: This needs to close down the server soket
 def interrupt_handler(signal, frame):
     SERVER_SOCKET.close()
     for user in USERS:
@@ -87,8 +87,10 @@ class IRCServer(socketserver.StreamRequestHandler):
                 packet.status = common.Status.ERROR
                 packet.error = common.Error.USER_ALREADY_EXISTS
                 return packet
-
-        USERS.append(User(packet.username, address[1], packet.port))
+        if DEBUG:
+            print(address.__str__())
+        u = User(packet.username, address, packet.port)
+        USERS.append(u)
         packet.status = common.Status.OK
         packet.error = common.Error.NO_ERROR
         return packet
@@ -167,8 +169,12 @@ class IRCServer(socketserver.StreamRequestHandler):
         return packet
 
     def handle_private_message(self, packet: common.PrivateMessage):
+        if DEBUG:
+            print("In handle_private_message")
         for user in USERS:
             if user.nick == packet.to:
+                if DEBUG:
+                    print("Sending message to " + packet.to)
                 self.send_message(packet, user)
                 return packet
 
@@ -198,12 +204,14 @@ class IRCServer(socketserver.StreamRequestHandler):
     @staticmethod
     def send_message(packet: common.IrcPacket, user: User):
         if DEBUG:
-            print("In send_message " + packet.__str__())
+            print("In send_message ")
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             if DEBUG:
-                print("\tSending message to " + user.host + ":" + str(
-                    user.port))
+                print("\tpreparing debug message")
+                print("\tSending message to " + user.host[0] + ":" + str(
+                    user.host[1]))
+                print("\tport is" + str(user.port))
             s.connect((user.host, user.port))
             s.send(packet.encode())
             s.close()
@@ -233,27 +241,34 @@ class IRCServer(socketserver.StreamRequestHandler):
 
         try:
             if isinstance(message, common.Connect):
-                message = self.handle_connect(message,
-                                              (message.username, address))
+                print("***Received Connect***")
+                message = self.handle_connect(message, address)
             elif isinstance(message, common.Disconnect):
+                print("***Received Disconnect***")
                 message = self.handle_disconnect(message)
             elif isinstance(message, common.CreateRoom):
+                print("***Received Create Room***")
                 message = self.handle_create_room(message)
             elif isinstance(message, common.JoinRoom):
                 print("***Received Join Room***")
                 message = self.handle_join_room(message)
             elif isinstance(message, common.LeaveRoom):
+                print("***Received Leave Room***")
                 message = self.handle_leave_room(message)
             elif isinstance(message, common.MessageRoom):
                 print("***Received Message Room***")
                 message = self.handle_message_room(message)
             elif isinstance(message, common.ListRooms):
+                print("***Received List Rooms***")
                 message = self.handle_list_rooms(message)
             elif isinstance(message, common.ListUsers):
+                print("***Received List Users***")
                 message = self.handle_list_users(message)
             elif isinstance(message, common.PrivateMessage):
+                print("***Received Private Message***")
                 message = self.handle_private_message(message)
             elif isinstance(message, common.Broadcast):
+                print("***Received Broadcast***")
                 message = self.handle_broadcast(message)
             else:
                 message.status = common.Status.ERROR
@@ -262,6 +277,7 @@ class IRCServer(socketserver.StreamRequestHandler):
             message.status = common.Status.ERROR
             message.error = common.Error.MALFORMED_MESSAGE
             print("Error in message router: '" + te.__str__() + "'")
+            raise (te)
 
         self.wfile.write(message.encode())
         return
