@@ -20,12 +20,15 @@
 
 import common
 from datetime import datetime
+from dateutil import tz
 import random
 import socket
 import socketserver
 import sys
 import threading
 from typing import Tuple, List
+
+DEBUG = False
 
 USAGE = """Usage: python3 client.py <nick> [<server> <port> [<low_port> <high_port>]]
 
@@ -58,8 +61,8 @@ LOW_PORT: int = 45679
 HIGH_PORT: int = 45965
 LISTEN_PORT: int
 SERVER: Tuple[str, int]
-
-DEBUG = True
+TO_ZONE = tz.tzlocal()
+FROM_ZONE = tz.tzutc()
 
 
 class IRCClient(socketserver.StreamRequestHandler):
@@ -81,31 +84,33 @@ class IRCClient(socketserver.StreamRequestHandler):
             print("You have been disconnected. Goodbye!")
             sys.exit()
         elif isinstance(message, common.CreateRoom):
-            self.display_status_message("Room " + message.room + " created",
-                                        message.timestamp)
-        elif isinstance(message, common.JoinRoom):
-            self.display_status_message("Joined " + message.room,
-                                        message.timestamp)
-        elif isinstance(message, common.LeaveRoom):
-            self.display_status_message("Left " + message.room,
-                                        message.timestamp)
-        elif isinstance(message, common.MessageRoom):
-            self.display_message(message.room, message.username,
-                                 message.message, message.timestamp)
-        elif isinstance(message, common.ListRooms):
-            self.display_status_message(
-                "Rooms available:" + "\n\t".join(message.rooms),
-                message.timestamp)
-        elif isinstance(message, common.ListUsers):
-            self.display_status_message(
-                "Users available:" + "\n\t".join(message.users),
-                message.timestamp)
-        elif isinstance(message, common.PrivateMessage):
-            self.display_private_message(message.username, message.to,
-                                         message.message, message.timestamp)
-        elif isinstance(message, common.Broadcast):
-            self.display_broadcast(message.username, message.message,
+            display_status_message("Room " + message.room + " created",
                                    message.timestamp)
+        elif isinstance(message, common.JoinRoom):
+            display_status_message("Joined " + message.room, message.timestamp)
+        elif isinstance(message, common.LeaveRoom):
+            display_status_message("Left " + message.room, message.timestamp)
+        elif isinstance(message, common.MessageRoom):
+            if message.status == common.Status.OK:
+                display_message(message.room, message.username,
+                                message.message, message.timestamp)
+            else:
+                display_error("Unable to message '" + message.room + "'",
+                              message.error)
+        # elif isinstance(message, common.ListRooms):
+        #     self.display_status_message(
+        #         "Rooms available:" + "\n\t".join(message.rooms),
+        #         message.timestamp)
+        # elif isinstance(message, common.ListUsers):
+        #     self.display_status_message(
+        #         "Users available: " + ", ".join(message.users),
+        #         message.timestamp)
+        elif isinstance(message, common.PrivateMessage):
+            display_private_message(message.username, message.to,
+                                    message.message, message.timestamp)
+        elif isinstance(message, common.Broadcast):
+            display_broadcast(message.username, message.message,
+                              message.timestamp)
 
     def connect(self):
         connect = common.Connect(self.nick)
@@ -118,35 +123,9 @@ class IRCClient(socketserver.StreamRequestHandler):
             self.display_error("Unable to connect: ", result.error)
             exit(1)
 
-    def display_message(self,
-                        room: str,
-                        from_user: str,
-                        message: str,
-                        message_time: datetime = datetime.utcnow()):
-        print(message_time.isoformat() + " <" + room + "> " + from_user + ": "
-              + message)
 
-    def display_status_message(self,
-                               message: str,
-                               message_time: datetime = datetime.utcnow()):
-        print(message_time.isoformat() + ": " + message)
-
-    def display_error(self, preamble: str, error: common.Error):
-        print(preamble + error.to_string())
-
-    def display_private_message(self,
-                                from_user: str,
-                                to_user: str,
-                                message: str,
-                                timestamp: datetime = datetime.utcnow()):
-        print(timestamp.isoformat() + " PM from " + from_user + ": " + message)
-
-    def display_broadcast(self,
-                          from_user: str,
-                          message: str,
-                          timestamp: datetime = datetime.utcnow()):
-        print("\n" + timestamp.isoformat() + " BROADCAST\n\tFrom <" + from_user
-              + ">: " + message)
+def utc_to_local(utc: datetime):
+    return utc.replace(tzinfo=FROM_ZONE).astimezone(TO_ZONE)
 
 
 def event_loop(username, port):
@@ -266,8 +245,7 @@ def private_message(command: str):
 
 def broadcast(command: str):
     message = command[6:].strip()
-    if len(message) < 1 or message.find(' ') != -1 or message.find(
-            common.UNIT_SEPARATOR) != -1:
+    if len(message) < 1 or message.find(common.UNIT_SEPARATOR) != -1:
         print("Enter a valid message")
         return
 
@@ -303,42 +281,66 @@ def handle_message(message: common.IrcPacket):
         print("You have been disconnected. Goodbye!")
         sys.exit()
     elif isinstance(message, common.CreateRoom):
+        if message.status == common.Status.ERROR:
+            display_error("Error creating room '" + message.room + "'",
+                          message.error)
+            return
+
         display_status_message("Room " + message.room + " created",
                                message.timestamp)
     elif isinstance(message, common.JoinRoom):
-        if message.status == common.Status.OK:
-            display_status_message("Joined " + message.room, message.timestamp)
-        else:
-            display_error("Error joining room", message.error)
+        if message.status == common.Status.ERROR:
+            display_error("Error joining room '" + message.room + "'",
+                          message.error)
+        display_status_message("Joined " + message.room, message.timestamp)
     elif isinstance(message, common.LeaveRoom):
         display_status_message("Left " + message.room, message.timestamp)
     elif isinstance(message, common.MessageRoom):
-        display_message(message.room, message.username, message.message,
-                        message.timestamp)
+        # We only check for errors here since. If our message is successful,
+        # we'll get a response from the server that displays our message on
+        # screen.
+        if message.status == common.Status.ERROR:
+            display_error("Unable to message '" + message.room + "'",
+                          message.error)
     elif isinstance(message, common.ListRooms):
-        display_status_message("Rooms available:" + "\n\t".join(message.rooms),
-                               message.timestamp)
+        if message.status == common.Status.ERROR:
+            display_error("Unable to list rooms.", message.error)
+            return
+
+        rooms = message.rooms
+        if len(rooms) > 0:
+            display_status_message(
+                "Rooms available:" + "\n\t".join(message.rooms),
+                message.timestamp)
+        else:
+            display_status_message(
+                "No rooms available. Create one with `/create <room>`.")
     elif isinstance(message, common.ListUsers):
-        display_status_message("Users available:" + "\n\t".join(message.users),
+        display_status_message("Users available: " + ", ".join(message.users),
                                message.timestamp)
     elif isinstance(message, common.PrivateMessage):
+        if message.status == common.Status.ERROR:
+            display_error("Unable to send private message.", message.error)
+            return
         display_private_message(message.username, message.to, message.message,
                                 message.timestamp)
-    elif isinstance(message, common.Broadcast):
-        display_broadcast(message.username, message.message, message.timestamp)
+    # elif isinstance(message, common.Broadcast):
+    #     display_broadcast(message.username, message.message, message.timestamp)
 
 
 def display_message(room: str,
                     from_user: str,
                     message: str,
                     message_time: datetime = datetime.utcnow()):
-    print(message_time.isoformat() + " <" + room + "> " + from_user + ": " +
-          message)
+    print(
+        utc_to_local(message_time).strftime("%Y-%m-%d %H:%M") + " <" + room +
+        "> " + from_user + ": " + message)
 
 
 def display_status_message(message: str,
                            message_time: datetime = datetime.utcnow()):
-    print(message_time.isoformat() + ": " + message)
+    print(
+        utc_to_local(message_time).strftime("%Y-%m-%d %H:%M") + ": " + message)
 
 
 def display_error(preamble: str, error: common.Error):
@@ -349,14 +351,16 @@ def display_private_message(from_user: str,
                             to_user: str,
                             message: str,
                             timestamp: datetime = datetime.utcnow()):
-    print(timestamp.isoformat() + " PM from " + from_user + ": " + message)
+    print(
+        utc_to_local(timestamp).strftime("%Y-%m-%d %H:%M") + " PM " + from_user
+        + " -> " + to_user + ": " + message)
 
 
 def display_broadcast(from_user: str,
                       message: str,
                       timestamp: datetime = datetime.utcnow()):
-    print("\n" + timestamp.isoformat() + " BROADCAST\n\tFrom <" + from_user +
-          ">: " + message)
+    print("\n" + utc_to_local(timestamp).strftime("%Y-%m-%d %H:%M") +
+          " BROADCAST\n\tFrom <" + from_user + ">: " + message)
 
 
 def random_port_in_range(low: int, high: int):
