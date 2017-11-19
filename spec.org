@@ -180,10 +180,6 @@ to valid labels:
 
 This MUST be the first message sent to the server.
 
-*** Message Format
-
- The message format is identical to the format in [[core_fields][Core Message Fields]].
-
 *** Usage
 
 Before additional messages can be sent, the client MUST provide a user name to
@@ -193,6 +189,14 @@ The server MUST associate the client's user name with the socket connection to
 the client. A ~Connect~ message SHOULD be sent only once. If the server receives
 additional ~Connect~ messages, the server MAY choose to ignore the duplicate
 message, send an error message, or disconnect the user.
+
+**** Example
+No example is provided. The reference client implements this command immediately
+on application start up.
+
+*** Message Format
+
+ The message format is identical to the format in [[core_fields][Core Message Fields]].
 
 *** Response
 
@@ -208,16 +212,16 @@ from all rooms.
 The server MAY choose to notify rooms and participants in private messages that
 the user has left the server.
 
-*** Message Format
-
-The message format is identical to the format in [[core_fields][Core Message Fields]].
-
 *** Usage
 
 Once the Disconnect message is sent, the user SHOULD no longer be able to send
 messages to the server.
 
 Any additional messages sent by the client MUST be ignored.
+
+**** Example
+
+=/quit=
 
 *** Response
 
@@ -229,14 +233,6 @@ The server MUST respond with an identical message with a status of ~OK~ and an e
 This message creates a new room. After acknowledgment, this room MUST be visible
 to other users until the room is destroyed.
 
-*** Message Format
-
-The initial fields of this message are identical to the format in [[core_fields][Core Message Fields]].
-
-In addition to the fields from [[core_fields][Core Message Fields]], a Create Room message MUST
-contain the name of the room to be created. A room name is a Label and MUST
-follow [[label][Label]] conventions.
-
 *** Usage
 
 A Create Room message is sent by the client to request that the server allocate
@@ -244,6 +240,18 @@ resources for a new room.
 
 A Create Room message may only be sent to the server after a Connect message is
 sent and acknowledged.
+
+**** Example
+
+=/create TheRoom=
+
+*** Message Format
+
+The initial fields of this message are identical to the format in [[core_fields][Core Message Fields]].
+
+In addition to the fields from [[core_fields][Core Message Fields]], a Create Room message MUST
+contain the name of the room to be created. A room name is a Label and MUST
+follow [[label][Label]] conventions.
 
 *** Response
 
@@ -260,14 +268,6 @@ This message adds a user to a room. After acknowledgment, the user MUST be
 subscribed to all messages sent to the room until the user sends a [[leave_room][Leave Room]]
 message.
 
-*** Message Format
-
-The initial fields of this message are identical to the format in [[core_fields][Core Message
-Fields]].
-
-In addition to the fields from [[core_fields][Core Message Fields]], a Join Room message MUST
-contain he name of the room to join.
-
 *** Usage
 
 A Join Room message is sent by the client to request that the server subscribe
@@ -275,6 +275,18 @@ to the user to a particular room.
 
 A Join Room message may only be sent to the server after Connect message is sent
 and acknowledged.
+
+**** Example
+
+=/join TheRoom=
+
+*** Message Format
+
+The initial fields of this message are identical to the format in [[core_fields][Core Message
+Fields]].
+
+In addition to the fields from [[core_fields][Core Message Fields]], a Join Room message MUST
+contain he name of the room to join.
 
 *** Response
 
@@ -291,14 +303,6 @@ This message unsubscribes a user from a room. After acknowledgment the user MUST
 no longer receive messages sent to the room unless the user re-subscribes using
 [[join_room][Join Room]].
 
-*** Message Format
-
-The initial fields of this message are identical to the format in [[core_fields][Core Message
-Fields]].
-
-In addition to the fields from [[core_fields][Core Message Fields]], a Leave Room message MUST
-contain the name of the room being left.
-
 *** Usage
 
 A Leave Room message is sent by the client to request that the server remove the
@@ -306,6 +310,18 @@ user from subscription to a room.
 
 A Leave Room message may only be sent to the server after a Connect message is
 sent and acknowledged.
+
+**** Example
+
+=/leave TheRoom=
+
+*** Message Format
+
+The initial fields of this message are identical to the format in [[core_fields][Core Message
+Fields]].
+
+In addition to the fields from [[core_fields][Core Message Fields]], a Leave Room message MUST
+contain the name of the room being left.
 
 *** Response
 
@@ -322,15 +338,6 @@ of ~MALFORMED_MESSAGE~.
 Sent when a user wants to send a message to all users subscribed to a particular
 room.
 
-*** Message Format
-
-The initial fields of this message are identical to the format in [[core_fields][Core Message
-Fields]].
-
-In addition to the fields from [[core_fields][Core Message Fields]], a Message Room message
-includes additional fields for the ~room~ to message and the ~message~ to be
-sent.
-
 *** Usage
 
 The Message Room message is used when one user wishes to communicate with all
@@ -339,6 +346,19 @@ is busy, the user will receive an error message from the server.
 
 Otherwise, the server will respond with a successful acknowledgment and the
 message will be sent to all users subscribed to the channel.
+
+**** Example
+
+=/msg TheRoom This is an example message.=
+
+*** Message Format
+
+The initial fields of this message are identical to the format in [[core_fields][Core Message
+Fields]].
+
+In addition to the fields from [[core_fields][Core Message Fields]], a Message Room message
+includes additional fields for the ~room~ to message and the ~message~ to be
+sent.
 
 *** Response
 
@@ -357,6 +377,16 @@ disconnect that user as if they had sent a [[disconnect][Disconnect]] message.
 
 This message provides a list of rooms to the user.
 
+*** Usage
+
+The List Rooms message is used whenever the client wants to see a list of rooms
+that are available to join. If no rooms exist, the user will receive an empty
+list back from the server.
+
+**** Example
+
+=/ls rooms=
+
 *** Message Format
 
 The initial fields of this message are identical to the format in [[core_fields][Core Message
@@ -366,12 +396,6 @@ In addition to the fields from [[core_fields][Core Message Fields]], a List Room
 includes a field for a list of rooms. Messages sent from the client MUST leave
 the ~rooms~ field empty. Messages sent from the server MAY have data populated
 in the ~rooms~ field.
-
-*** Usage
-
-The List Rooms message is used whenever the client wants to see a list of rooms
-that are available to join. If no rooms exist, the user will receive an empty
-list back from the server.
 
 *** Response
 
@@ -386,6 +410,16 @@ to the rules set out in [[label][Labels]].
 
 This message provides the ability for a user to list all users present on the server.
 
+*** Usage
+
+The List Users message is used whenever a client wants to see a list of other
+users present on a server. If no other users are present, the user will receive
+an empty list of users from the server.
+
+**** Example
+
+=/ls users=
+
 *** Message Format
 
 The initial fields of this message are identical to the format in [[core_fields][Core Message
@@ -396,12 +430,6 @@ includes a field for a list of users. Messages sent from the client MUST leave
 the ~users~ field empty. Messages sent from the server MAY have data populated
 in the ~users~ field.
 
-*** Usage
-
-The List Users message is used whenever a client wants to see a list of other
-users present on a server. If no other users are present, the user will receive
-an empty list of users from the server.
-
 *** Response
 
 The server MUST respond with an identical message (barring the ~users~ field)
@@ -410,25 +438,54 @@ with a status of ~OK~ and an error of ~NO_ERROR~.
 The ~users~ field MUST be a comma separated list of user names. User names MUST conform
 to the rules set out in [[label][Labels]].
 
-** Private Message
-<<private_message>>
+** List Users in Room
+<<list_users_in_room>>
 
-Used by the client to send a private message to another user.
+This message lists the users present in a specific room.
+
+*** Usage
+
+The List Users in Room message is used when a client wishes to see a list of
+other users present in a specific room. If no other users are present, the user
+will receive an empty list from the server.
+
+**** Example
+
+=/ls usersin TheRoom=
 
 *** Message Format
 
 The initial fields of this message are identical to the format in [[core_fields][Core Message
 Fields]].
 
-In addition to the fields from [[core_fields][Core Message Fields]], a Private Message contains
-at ~to~ field (a string) and a ~message~ field (also a string). The ~to~ field
-MUST conform to the rules set out in [[label][Labels]].
+In addition to the field from [[core_fields][Core Message Fields]], a List Users in Rooms message
+includes a field for the list of users. Messages send from the client MUST leave
+the ~users~ field empty. Messages sent from the server MAY have data populated
+in the ~users~ field.
+
+*** Response
+
+The server MUST respond with an identical message (barring the ~users~ field)
+with a status of ~OK~ and an error of ~NO_ERROR~.
+
+The ~users~ field MUST be a comma separated list of user names. User names MUST
+conform to the rules set out in [[label][Labels]].
+
+
+** Private Message
+<<private_message>>
+
+Used by the client to send a private message to another user.
 
 *** Usage
 
 The Private Message is used to initiate or continue a private conversation with
 another user. If the recipient is not connected to the server, the server MUST
 return a failure message.
+
+**** Example
+
+=/msg OtherUser hey, how are you doing?=
 
 *** Response
 
@@ -444,6 +501,17 @@ status of ~ERROR~ and an error of ~USER_NOT_FOUND~.
 
 Broadcasts a message to all users and rooms.
 
+*** Usage
+
+The Broadcast message is used to send a message to all users and rooms. All
+online users MUST receive the message via a combination of rooms and private
+message. The Broadcast message MUST NOT be visible in existing private messaging
+conversations.
+
+**** Example
+
+=/bcast Everybody pay attention to me!=
+
 *** Message Format
 
 The initial fields of this message are identical to the format in [[core_fields][Core Message
@@ -451,13 +519,6 @@ Fields]].
 
 In addition to the fields from [[core_fields][Core Message Fields]], a Broadcast contains a
 ~message~ field (a string).
-
-*** Usage
-
-The Broadcast message is used to send a message to all users and rooms. All
-online users MUST receive the message via a combination of rooms and private
-message. The Broadcast message MUST NOT be visible in existing private messaging
-conversations.
 
 *** Response
 
