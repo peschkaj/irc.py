@@ -19,11 +19,11 @@
 # Server for CS594 project
 
 from typing import List
-import common
 import socket
 import socketserver
 import sys
 import signal
+import common
 
 
 class User(object):
@@ -42,7 +42,8 @@ class Room(object):
         self.name = name
 
     def add_to_room(self, user: User):
-        self.users.append(user)
+        if not user in self.users:
+            self.users.append(user)
 
     def remove_user(self, user: User):
         try:
@@ -70,15 +71,16 @@ ROOMS: List[Room] = list()
 LISTEN_ADDRESS = "127.0.0.1"
 LISTEN_PORT = 8080
 SERVER_SOCKET = None
-DEBUG = False
+DEBUG = True
 
 
 # TODO: This needs to send all users a message that they're being removed
 # TODO: This needs to close down the server soket
 def interrupt_handler(signal, frame):
-    SERVER_SOCKET.close()
     for user in USERS:
         IRCServer.send_message(common.Disconnect, user)
+    server.server_close()
+    SERVER_SOCKET.close()
     sys.exit(0)
 
 
@@ -124,7 +126,7 @@ class IRCServer(socketserver.StreamRequestHandler):
                 packet.error = common.Error.ROOM_ALREADY_EXISTS
                 return packet
 
-        ROOMS.append(Room(packet.room, [packet.username]))
+        ROOMS.append(Room(packet.room))
         packet.status = common.Status.OK
         packet.error = common.Error.NO_ERROR
         return packet
@@ -182,7 +184,7 @@ class IRCServer(socketserver.StreamRequestHandler):
         for user in USERS:
             if user.nick == packet.to:
                 if DEBUG:
-                    printgs("\tSending message to " + packet.to)
+                    print("\tSending message to " + packet.to)
                 self.send_message(packet, user)
                 return packet
 
@@ -193,7 +195,7 @@ class IRCServer(socketserver.StreamRequestHandler):
     def handle_list_rooms(packet: common.ListRooms):
         packet.rooms = list()
         for room in ROOMS:
-            packet.rooms.append(room)
+            packet.rooms.append(room.name)
 
         packet.status = common.Status.OK
         packet.error = common.Error.NO_ERROR
@@ -207,6 +209,28 @@ class IRCServer(socketserver.StreamRequestHandler):
 
         packet.status = common.Status.OK
         packet.error = common.Error.NO_ERROR
+        return packet
+
+    @staticmethod
+    def handle_list_users_in_room(packet: common.ListUsersInRoom):
+        packet.users = list()
+        if DEBUG:
+            print("In handle_list_users_in_room")
+            print("\tpacket is '" + packet.__str__() + "'")
+            print("\tlooking for room '" + packet.room + "'")
+        for room in ROOMS:
+            if DEBUG:
+                print("\t" + room.name + " == " + packet.room)
+            if room.name == packet.room:
+                print("\tFound room '" + room.name + "'")
+                for user in room.users:
+                    packet.users.append(user)
+                packet.status = common.Status.OK
+                packet.error = common.Error.NO_ERROR
+                return packet
+
+        packet.status = common.Status.ERROR
+        packet.error = common.Error.ROOM_NOT_FOUND
         return packet
 
     @staticmethod
@@ -236,7 +260,6 @@ class IRCServer(socketserver.StreamRequestHandler):
         return packet
 
     def handle(self):
-        #input = self.rfile.readline().decode().strip()
         new_input = self.rfile.readline()
 
         address = self.connection.getpeername()
@@ -288,6 +311,11 @@ class IRCServer(socketserver.StreamRequestHandler):
                 if DEBUG:
                     print("\tmessage is: '" + message.to_string() + "'")
                 message = self.handle_list_users(message)
+            elif isinstance(message, common.ListUsersInRoom):
+                print("***Received List Users in Room***")
+                if DEBUG:
+                    print("\tmessage is: '" + message.to_string() + "'")
+                message = self.handle_list_users_in_room(message)
             elif isinstance(message, common.PrivateMessage):
                 print("***Received Private Message***")
                 if DEBUG:
@@ -306,6 +334,9 @@ class IRCServer(socketserver.StreamRequestHandler):
             message.error = common.Error.MALFORMED_MESSAGE
             print("Error in message router: '" + te.__str__() + "'")
             raise (te)
+
+        if DEBUG:
+            print("\toutbound message is '" + message.__str__() + "'")
 
         self.wfile.write(message.encode())
         return

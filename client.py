@@ -42,9 +42,11 @@ helptext = """Available Commands:
 /quit                  Disconnect from the server and quit this program
 /create <room>         Creates <room>. Does not join <room>
 /join <room>           Joins <room>
+/leave <room>          Leaves <room>
 /msg <room> <message>  Sends <message> to <room>
 /ls rooms              List available rooms
 /ls users              List available users
+/ls usersin <room>     List available users present in <room>
 /pm <user> <message>   Sends <message> to <user>
 /bcast <message>       Sends <message> to all users
 """
@@ -97,14 +99,6 @@ class IRCClient(socketserver.StreamRequestHandler):
             else:
                 display_error("Unable to message '" + message.room + "'",
                               message.error)
-        # elif isinstance(message, common.ListRooms):
-        #     self.display_status_message(
-        #         "Rooms available:" + "\n\t".join(message.rooms),
-        #         message.timestamp)
-        # elif isinstance(message, common.ListUsers):
-        #     self.display_status_message(
-        #         "Users available: " + ", ".join(message.users),
-        #         message.timestamp)
         elif isinstance(message, common.PrivateMessage):
             display_private_message(message.username, message.to,
                                     message.message, message.timestamp)
@@ -152,12 +146,16 @@ def event_loop(username, port):
             create_room(command)
         elif command.startswith("/join"):
             join_room(command)
+        elif command.startswith("/leave"):
+            leave_room(command)
         elif command.startswith("/msg"):
             message_room(command)
         elif command == "/ls rooms":
             list_rooms()
         elif command == "/ls users":
             list_users()
+        elif command.startswith("/ls usersin"):
+            list_users_in_room(command)
         elif command.startswith("/pm"):
             private_message(command)
         elif command.startswith("/bcast"):
@@ -189,11 +187,28 @@ def create_room(command: str):
 
 def join_room(command: str):
     room = command[5:].strip()
-    if len(room) < 1 or room.find(' ') != -1:
+    if len(room) < 1 or room.find(' ') != -1 or room.find(
+            common.UNIT_SEPARATOR) != -1:
         print("Enter a valid room name")
         return
     jr = common.JoinRoom(room, USERNAME)
     send_message(jr)
+
+
+def leave_room(command: str):
+    command = command[6:].strip()
+    parts = command.split(' ')
+    if len(parts) < 1:
+        print("Enter a room to leave")
+        return
+    elif len(parts) > 1:
+        print(
+            "You've entered more than one room. I will only leave the first room."
+        )
+
+    room = parts[0]
+    lr = common.LeaveRoom(room, USERNAME)
+    send_message(lr)
 
 
 def message_room(command: str):
@@ -221,6 +236,16 @@ def list_rooms():
 def list_users():
     users: List[str] = list()
     send_message(common.ListUsers(users, USERNAME))
+
+
+def list_users_in_room(command: str):
+    users: List[str] = list()
+    room = command[11:].strip()
+    if len(room) < 1 or room.find(' ') != -1 or room.find(
+            common.UNIT_SEPARATOR) != -1:
+        print("Enter a valid room")
+        return
+    send_message(common.ListUsersInRoom(users, room, USERNAME))
 
 
 def private_message(command: str):
@@ -318,6 +343,20 @@ def handle_message(message: common.IrcPacket):
     elif isinstance(message, common.ListUsers):
         display_status_message("Users available: " + ", ".join(message.users),
                                message.timestamp)
+    elif isinstance(message, common.ListUsersInRoom):
+        if message.status == common.Status.ERROR:
+            display_error(
+                "Unable to list users in room '" + message.room + "'",
+                message.error)
+            return
+
+        if len(message.users) == 0:
+            display_status_message("Room '" + message.room + "' is empty.")
+            return
+
+        display_status_message(
+            "Users in '" + message.room + "': \n\t" + ", ".join(message.users),
+            message.timestamp)
     elif isinstance(message, common.PrivateMessage):
         if message.status == common.Status.ERROR:
             display_error("Unable to send private message.", message.error)

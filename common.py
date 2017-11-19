@@ -345,10 +345,14 @@ class ListUsersInRoom(IrcPacket):
         self.room = room
 
     def __str__(self):
+        user_list_str = ""
+        if (len(self.users) > 0):
+            user_list_str = ",".join(self.users)
+
         return "{1}{0}{2}{0}{3}{0}{4}{0}{5}{0}{6}{0}{7}".format(
             UNIT_SEPARATOR, self.opcode.value, self.status.value,
             self.error.value, self.username,
-            self.timestamp.isoformat(), self.room, ",".join(self.users))
+            self.timestamp.isoformat(), self.room, user_list_str)
 
     def encode(self):
         return (self.__str__() + "\n").encode()
