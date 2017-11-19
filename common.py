@@ -39,6 +39,7 @@ class Operations(Enum):
     USER_LIST = 8
     USER_MSG = 9
     BROADCAST = 10
+    USER_IN_ROOM_LIST = 11
 
     def __str__(self):
         return self.name
@@ -330,6 +331,29 @@ class ListUsers(IrcPacket):
         return (self.__str__() + "\n").encode()
 
 
+class ListUsersInRoom(IrcPacket):
+    def __init__(self,
+                 users: List[str],
+                 room: str,
+                 username: str,
+                 timestamp: datetime = datetime.datetime.utcnow(),
+                 status: Status = Status.OK,
+                 error: Error = Error.NO_ERROR):
+        super().__init__(Operations.USER_IN_ROOM_LIST, username, timestamp,
+                         status, error)
+        self.users = users
+        self.room = room
+
+    def __str__(self):
+        return "{1}{0}{2}{0}{3}{0}{4}{0}{5}{0}{6}{0}{7}".format(
+            UNIT_SEPARATOR, self.opcode.value, self.status.value,
+            self.error.value, self.username,
+            self.timestamp.isoformat(), self.room, ",".join(self.users))
+
+    def encode(self):
+        return (self.__str__() + "\n").encode()
+
+
 class PrivateMessage(IrcPacket):
     def __init__(self,
                  username: str,
@@ -429,6 +453,14 @@ def decode(packet: bytes):
         return Broadcast(pieces[5], pieces[3],
                          dateutil.parser.parse(pieces[4]),
                          Status(int(pieces[1])), Error(int(pieces[2])))
+    elif msg_type == 11:
+        user_list = []
+        if (len(pieces) > 6):
+            user_list.extend(pieces[6].split(','))
+
+        return ListUsersInRoom(user_list, pieces[5], pieces[3],
+                               dateutil.parser.parse(pieces[4]),
+                               Status(int(pieces[1])), Error(int(pieces[2])))
 
     raise TypeError
 
@@ -490,6 +522,19 @@ class TestCommon(unittest.TestCase):
 
     def test_ListUsers_withUsers(self):
         p = ListUsers(["some user", "another user", "a third user"], "user")
+        ep = p.encode()
+        dp = decode(ep)
+        self.assertEqual(p, dp)
+
+    def test_ListUsersInRoom_empty(self):
+        p = ListUsersInRoom([], "The Room", "user")
+        ep = p.encode()
+        dp = decode(ep)
+        self.assertEqual(p, dp)
+
+    def test_ListUsersInRoom_withUsers(self):
+        p = ListUsersInRoom(["some user", "another user", "a third user"],
+                            "The Room", "user")
         ep = p.encode()
         dp = decode(ep)
         self.assertEqual(p, dp)
