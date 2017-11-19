@@ -51,7 +51,7 @@ class Room(object):
                 self.users.remove(user)
             if DEBUG:
                 print(self.name + ": Removed '" + user + "'")
-        except ValueError as ve:
+        except ValueError:
             print("\tUnable to find user, probably safe to ignore them...")
 
     def contains_user(self, username):
@@ -62,7 +62,7 @@ class Room(object):
         return False
 
     def __str__(self):
-        return self.room.name
+        return self.name
 
 
 USERS: List[User] = list()
@@ -71,14 +71,13 @@ ROOMS: List[Room] = list()
 LISTEN_ADDRESS = "127.0.0.1"
 LISTEN_PORT = 8080
 SERVER_SOCKET = None
-DEBUG = True
+DEBUG = False
 
 
-# TODO: This needs to send all users a message that they're being removed
-# TODO: This needs to close down the server soket
 def interrupt_handler(signal, frame):
     for user in USERS:
-        IRCServer.send_message(common.Disconnect, user)
+        disco = common.Disconnect(user.nick)
+        IRCServer.send_message(disco, user)
     server.server_close()
     SERVER_SOCKET.close()
     sys.exit(0)

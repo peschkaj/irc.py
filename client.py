@@ -80,11 +80,14 @@ class IRCClient(socketserver.StreamRequestHandler):
             sys.exit(1)
 
     def handle_server_message(self, message: common.IrcPacket):
+        if DEBUG:
+            print("In handle_server_message")
+            print("\tmessage is '" + message.__str__() + "'")
         if isinstance(message, common.Connect):
             print("Connection successful!")
         elif isinstance(message, common.Disconnect):
             print("You have been disconnected. Goodbye!")
-            sys.exit()
+            sys.exit(0)
         elif isinstance(message, common.CreateRoom):
             display_status_message("Room " + message.room + " created",
                                    message.timestamp)
@@ -105,17 +108,6 @@ class IRCClient(socketserver.StreamRequestHandler):
         elif isinstance(message, common.Broadcast):
             display_broadcast(message.username, message.message,
                               message.timestamp)
-
-    def connect(self):
-        connect = common.Connect(self.nick)
-        result = self.send_message(connect)
-
-        if DEBUG:
-            print("Message received: " + result.__str__())
-
-        if result.status != common.Status.OK:
-            self.display_error("Unable to connect: ", result.error)
-            exit(1)
 
 
 def utc_to_local(utc: datetime):
@@ -304,7 +296,7 @@ def handle_message(message: common.IrcPacket):
         print("Connection successful!")
     elif isinstance(message, common.Disconnect):
         print("You have been disconnected. Goodbye!")
-        sys.exit()
+        sys.exit(0)
     elif isinstance(message, common.CreateRoom):
         if message.status == common.Status.ERROR:
             display_error("Error creating room '" + message.room + "'",
