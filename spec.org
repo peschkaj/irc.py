@@ -225,7 +225,8 @@ Any additional messages sent by the client MUST be ignored.
 
 *** Response
 
-The server MUST respond with an identical message with a status of ~OK~ and an error of ~NO_ERROR~.
+The server MUST respond with an identical message with a status of ~OK~ and an
+error of ~NO_ERROR~.
 
 ** Create Room
 <<create_room>>
@@ -247,7 +248,8 @@ sent and acknowledged.
 
 *** Message Format
 
-The initial fields of this message are identical to the format in [[core_fields][Core Message Fields]].
+The initial fields of this message are identical to the format in [[core_fields][Core Message
+Fields]].
 
 In addition to the fields from [[core_fields][Core Message Fields]], a Create Room message MUST
 contain the name of the room to be created. A room name is a Label and MUST
@@ -408,7 +410,8 @@ to the rules set out in [[label][Labels]].
 ** List Users
 <<list_users>>
 
-This message provides the ability for a user to list all users present on the server.
+This message provides the ability for a user to list all users present on the
+server.
 
 *** Usage
 
@@ -435,8 +438,8 @@ in the ~users~ field.
 The server MUST respond with an identical message (barring the ~users~ field)
 with a status of ~OK~ and an error of ~NO_ERROR~.
 
-The ~users~ field MUST be a comma separated list of user names. User names MUST conform
-to the rules set out in [[label][Labels]].
+The ~users~ field MUST be a comma separated list of user names. User names MUST
+conform to the rules set out in [[label][Labels]].
 
 ** List Users in Room
 <<list_users_in_room>>
@@ -557,7 +560,8 @@ None
 
 ** Normative References
 
-[RFC2119] Bradner, S., "Key words for use in RFCs to Indicate Requirement Levels", BCP 14, RFC 2119, March 1997.
+[RFC2119] Bradner, S., "Key words for use in RFCs to Indicate Requirement
+Levels", BCP 14, RFC 2119, March 1997.
 
 \clearpage
 * Author's Address
