@@ -191,6 +191,7 @@ additional ~Connect~ messages, the server MAY choose to ignore the duplicate
 message, send an error message, or disconnect the user.
 
 **** Example
+
 No example is provided. The reference client implements this command immediately
 on application start up.
 
